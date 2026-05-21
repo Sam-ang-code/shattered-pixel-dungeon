@@ -1235,6 +1235,21 @@ public abstract class Mob extends Char {
 		@Override
 		public boolean act( boolean enemyInFOV, boolean justAlerted ) {
 			enemySeen = enemyInFOV;
+
+			//if critically wounded and allies are nearby, flee toward them
+			//instead of continuing to fight. This produces more realistic
+			//self-preservation behavior (Functional Correctness improvement).
+			if (HP <= HT * FLEE_HP_THRESHOLD && HP > 0
+					&& buff(Terror.class) == null && buff(Dread.class) == null
+					&& findNearestAlly(FLEE_ALLY_SEARCH_RANGE) != null) {
+				state = FLEEING;
+				target = enemy != null ? enemy.pos : pos;
+				if (Dungeon.level.heroFOV[pos]) {
+					GLog.w(Messages.get(Mob.class, "flee_low_hp", Messages.titleCase(name())));
+				}
+				return state.act(enemyInFOV, justAlerted);
+			}
+
 			if (enemyInFOV && !isCharmedBy( enemy ) && canAttack( enemy )) {
 
 				recentlyAttackedBy.clear();
@@ -1344,6 +1359,62 @@ public abstract class Mob extends Char {
 
 	}
 
+	//maximum distance to search for allies when fleeing
+	protected static final int FLEE_ALLY_SEARCH_RANGE = 8;
+	//minimum distance an ally must be from the enemy to be a valid flee target
+	protected static final int FLEE_ALLY_MIN_ENEMY_DIST = 3;
+	//HP threshold (fraction of max HP) below which mobs will flee toward allies
+	protected static final float FLEE_HP_THRESHOLD = 0.25f;
+
+	/**
+	 * Finds the nearest allied mob that the fleeing mob can regroup with.
+	 * Returns null if no suitable ally is found within range.
+	 *
+	 * A valid ally must:
+	 * - Be the same alignment as this mob
+	 * - Not be this mob itself
+	 * - Be alive and present on the level
+	 * - Be within the search range
+	 * - Not be too close to the enemy (to avoid fleeing back into danger)
+	 * - Not be in a PASSIVE or SLEEPING state (inactive allies are not helpful)
+	 */
+	protected Mob findNearestAlly(int range) {
+		Mob closestAlly = null;
+		int closestDist = Integer.MAX_VALUE;
+
+		for (Mob mob : Dungeon.level.mobs) {
+			//skip self, dead mobs, and mobs with different alignment
+			if (mob == Mob.this || !mob.isAlive() || mob.alignment != alignment) {
+				continue;
+			}
+
+			//skip passive or sleeping allies — they won't help in a fight
+			if (mob.state == mob.PASSIVE || mob.state == mob.SLEEPING) {
+				continue;
+			}
+
+			int distToAlly = Dungeon.level.distance(pos, mob.pos);
+
+			//must be within search range
+			if (distToAlly > range) {
+				continue;
+			}
+
+			//ally must not be too close to the enemy, to avoid leading us back into danger
+			if (enemy != null && Dungeon.level.distance(mob.pos, enemy.pos) < FLEE_ALLY_MIN_ENEMY_DIST) {
+				continue;
+			}
+
+			//pick the closest valid ally
+			if (distToAlly < closestDist) {
+				closestDist = distToAlly;
+				closestAlly = mob;
+			}
+		}
+
+		return closestAlly;
+	}
+
 	protected class Fleeing implements AiState {
 
 		public static final String TAG	= "FLEEING";
@@ -1365,8 +1436,23 @@ public abstract class Mob extends Char {
 			}
 
 			int oldPos = pos;
-			if (target != -1 && getFurther( target )) {
 
+			//try to flee toward a nearby ally for tactical regrouping
+			Mob allyTarget = findNearestAlly(FLEE_ALLY_SEARCH_RANGE);
+
+			if (allyTarget != null && !Dungeon.level.adjacent(pos, allyTarget.pos) && getCloser(allyTarget.pos)) {
+				//successfully moving toward an ally
+				if (Dungeon.level.heroFOV[pos] || Dungeon.level.heroFOV[oldPos]) {
+					GLog.i(Messages.get(Mob.class, "flee_toward_ally", Messages.titleCase(name())));
+				}
+				spend( 1 / speed() );
+				return moveSprite( oldPos, pos );
+
+			} else if (target != -1 && getFurther( target )) {
+				//fallback: original flee behavior when no ally is available
+				if (Dungeon.level.heroFOV[pos] || Dungeon.level.heroFOV[oldPos]) {
+					GLog.i(Messages.get(Mob.class, "flee_default", Messages.titleCase(name())));
+				}
 				spend( 1 / speed() );
 				return moveSprite( oldPos, pos );
 
