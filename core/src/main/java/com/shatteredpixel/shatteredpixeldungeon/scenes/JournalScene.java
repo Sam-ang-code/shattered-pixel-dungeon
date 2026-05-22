@@ -21,6 +21,7 @@
 
 package com.shatteredpixel.shatteredpixeldungeon.scenes;
 
+import com.badlogic.gdx.Input;
 import com.shatteredpixel.shatteredpixeldungeon.Assets;
 import com.shatteredpixel.shatteredpixeldungeon.Badges;
 import com.shatteredpixel.shatteredpixeldungeon.Chrome;
@@ -35,24 +36,44 @@ import com.shatteredpixel.shatteredpixeldungeon.sprites.ItemSprite;
 import com.shatteredpixel.shatteredpixeldungeon.sprites.ItemSpriteSheet;
 import com.shatteredpixel.shatteredpixeldungeon.tiles.TerrainFeaturesTilemap;
 import com.shatteredpixel.shatteredpixeldungeon.ui.ExitButton;
-import com.shatteredpixel.shatteredpixeldungeon.ui.IconButton;
 import com.shatteredpixel.shatteredpixeldungeon.ui.Icons;
 import com.shatteredpixel.shatteredpixeldungeon.ui.TitleBackground;
 import com.shatteredpixel.shatteredpixeldungeon.ui.StyledButton;
+import com.shatteredpixel.shatteredpixeldungeon.ui.Window;
 import com.shatteredpixel.shatteredpixeldungeon.windows.IconTitle;
 import com.shatteredpixel.shatteredpixeldungeon.windows.WndJournal;
+import com.watabou.input.KeyEvent;
 import com.watabou.noosa.Camera;
 import com.watabou.noosa.NinePatch;
 import com.watabou.noosa.audio.Music;
 import com.watabou.utils.RectF;
 import com.watabou.utils.SparseArray;
+import com.watabou.utils.Signal;
 
 public class JournalScene extends PixelScene {
 
-	public static final int WIDTH_P     = 126;
-	public static final int WIDTH_L     = 216;
+	public static final int WIDTH_P = 126;
+	public static final int WIDTH_L = 216;
 
 	private static int lastIDX = 0;
+
+	private static final int TAB_BADGES  = 0;
+	private static final int TAB_CATALOG = 1;
+	private static final int TAB_GUIDE   = 2;
+	private static final int TAB_ALCHEMY = 3;
+	private static final int TAB_COUNT   = 4;
+
+	private StyledButton btnBadges;
+	private StyledButton btnCatalog;
+	private StyledButton btnGuide;
+	private StyledButton btnAlchemy;
+
+	private WndJournal.BadgesTab badgesTab;
+	private WndJournal.CatalogTab catalogTab;
+	private WndJournal.GuideTab guideTab;
+	private WndJournal.AlchemyTab alchemyTab;
+
+	private Signal.Listener<KeyEvent> keyboardNavListener;
 
 	@Override
 	public void create() {
@@ -90,7 +111,7 @@ public class JournalScene extends PixelScene {
 
 		float top = 20;
 
-		IconTitle title = new IconTitle( Icons.JOURNAL.get(), Messages.get(this, "title") );
+		IconTitle title = new IconTitle(Icons.JOURNAL.get(), Messages.get(this, "title"));
 		title.setSize(200, 0);
 		title.setPos(
 				insets.left + (w - title.reqWidth()) / 2f,
@@ -109,51 +130,64 @@ public class JournalScene extends PixelScene {
 		panel.y = insets.top + top;
 		add(panel);
 
-		switch (lastIDX){
-			case 0: default:
-				WndJournal.BadgesTab badges = new WndJournal.BadgesTab();
-				add(badges);
-				badges.setRect(panel.x + panel.marginLeft(),
-						panel.y + panel.marginTop(),
-						panel.width() - panel.marginHor(),
-						panel.height() - panel.marginVer());
+		createActiveContent(panel);
+		createTabButtons(panel, pw, ph);
+
+		registerKeyboardNavigation();
+
+		addToBack(BG);
+
+		ExitButton btnExit = new ExitButton();
+		btnExit.setPos(insets.left + w - btnExit.width(), insets.top);
+		add(btnExit);
+
+		fadeIn();
+	}
+
+	private void createActiveContent(NinePatch panel) {
+
+		float contentX = panel.x + panel.marginLeft();
+		float contentY = panel.y + panel.marginTop();
+		float contentW = panel.width() - panel.marginHor();
+		float contentH = panel.height() - panel.marginVer();
+
+		switch (lastIDX) {
+
+			case TAB_BADGES:
+			default:
+				badgesTab = new WndJournal.BadgesTab();
+				add(badgesTab);
+				badgesTab.setRect(contentX, contentY, contentW, contentH);
 				break;
-			case 1:
-				WndJournal.CatalogTab catalog = new WndJournal.CatalogTab();
-				add(catalog);
-				catalog.setRect(panel.x + panel.marginLeft(),
-						panel.y + panel.marginTop(),
-						panel.width() - panel.marginHor(),
-						panel.height() - panel.marginVer());
-				catalog.updateList();
+
+			case TAB_CATALOG:
+				catalogTab = new WndJournal.CatalogTab();
+				add(catalogTab);
+				catalogTab.setRect(contentX, contentY, contentW, contentH);
+				catalogTab.updateList();
 				break;
-			case 2:
-				WndJournal.GuideTab guidebook = new WndJournal.GuideTab();
-				add(guidebook);
-				guidebook.setRect(panel.x + panel.marginLeft(),
-						panel.y + panel.marginTop(),
-						panel.width() - panel.marginHor(),
-						panel.height() - panel.marginVer());
-				guidebook.updateList();
+
+			case TAB_GUIDE:
+				guideTab = new WndJournal.GuideTab();
+				add(guideTab);
+				guideTab.setRect(contentX, contentY, contentW, contentH);
+				guideTab.updateList();
 				break;
-			case 3:
-				WndJournal.AlchemyTab alchemy = new WndJournal.AlchemyTab();
-				add(alchemy);
-				alchemy.setRect(panel.x + panel.marginLeft(),
-						panel.y + panel.marginTop(),
-						panel.width() - panel.marginHor(),
-						panel.height() - panel.marginVer());
+
+			case TAB_ALCHEMY:
+				alchemyTab = new WndJournal.AlchemyTab();
+				add(alchemyTab);
+				alchemyTab.setRect(contentX, contentY, contentW, contentH);
 				break;
 		}
+	}
 
-		StyledButton btnBadges =  new StyledButton(Chrome.Type.GREY_BUTTON_TR, ""){
+	private void createTabButtons(NinePatch panel, int pw, int ph) {
+
+		btnBadges = new StyledButton(Chrome.Type.GREY_BUTTON_TR, "") {
 			@Override
 			protected void onClick() {
-				if (lastIDX != 0) {
-					lastIDX = 0;
-				}
-				ShatteredPixelDungeon.seamlessResetScene();
-				super.onClick();
+				switchJournalTab(TAB_BADGES);
 			}
 
 			@Override
@@ -162,82 +196,177 @@ public class JournalScene extends PixelScene {
 			}
 		};
 		btnBadges.icon(Icons.BADGES.get());
-		btnBadges.setRect(panel.x, panel.y + ph - 3, pw/4f + 1.5f, lastIDX == 0 ? 25 : 20);
+		btnBadges.setRect(panel.x, panel.y + ph - 3, pw / 4f + 1.5f, lastIDX == TAB_BADGES ? 25 : 20);
 		align(btnBadges);
-		if (lastIDX != 0) btnBadges.icon().brightness(0.6f);
 		addToBack(btnBadges);
 
-		StyledButton btnCatalog =  new StyledButton(Chrome.Type.GREY_BUTTON_TR, ""){
+		btnCatalog = new StyledButton(Chrome.Type.GREY_BUTTON_TR, "") {
 			@Override
 			protected void onClick() {
-				if (lastIDX != 1) {
-					lastIDX = 1;
-				}
-				ShatteredPixelDungeon.seamlessResetScene();
-				super.onClick();
+				switchJournalTab(TAB_CATALOG);
 			}
+
 			@Override
 			protected String hoverText() {
 				return Messages.get(WndJournal.CatalogTab.class, "title");
 			}
 		};
 		btnCatalog.icon(Icons.CATALOG.get());
-		btnCatalog.setRect(btnBadges.right()-2, btnBadges.top(), pw/4f + 1.5f, lastIDX == 1 ? 25 : 20);
+		btnCatalog.setRect(btnBadges.right() - 2, btnBadges.top(), pw / 4f + 1.5f, lastIDX == TAB_CATALOG ? 25 : 20);
 		align(btnCatalog);
-		if (lastIDX != 1) btnCatalog.icon().brightness(0.6f);
 		addToBack(btnCatalog);
 
-		StyledButton btnGuide =  new StyledButton(Chrome.Type.GREY_BUTTON_TR, ""){
+		btnGuide = new StyledButton(Chrome.Type.GREY_BUTTON_TR, "") {
 			@Override
 			protected void onClick() {
-				if (lastIDX != 2) {
-					lastIDX = 2;
-				}
-				ShatteredPixelDungeon.seamlessResetScene();
-				super.onClick();
+				switchJournalTab(TAB_GUIDE);
 			}
+
 			@Override
 			protected String hoverText() {
 				return Messages.get(WndJournal.GuideTab.class, "title");
 			}
 		};
 		btnGuide.icon(new ItemSprite(ItemSpriteSheet.MASTERY));
-		btnGuide.setRect(btnCatalog.right()-2, btnBadges.top(), pw/4f + 1.5f, lastIDX == 2 ? 25 : 20);
+		btnGuide.setRect(btnCatalog.right() - 2, btnBadges.top(), pw / 4f + 1.5f, lastIDX == TAB_GUIDE ? 25 : 20);
 		align(btnGuide);
-		if (lastIDX != 2) btnGuide.icon().brightness(0.6f);
 		addToBack(btnGuide);
 
-		StyledButton btnAlchemy =  new StyledButton(Chrome.Type.GREY_BUTTON_TR, ""){
+		btnAlchemy = new StyledButton(Chrome.Type.GREY_BUTTON_TR, "") {
 			@Override
 			protected void onClick() {
-				if (lastIDX != 3) {
-					lastIDX = 3;
-				}
-				ShatteredPixelDungeon.seamlessResetScene();
-				super.onClick();
+				switchJournalTab(TAB_ALCHEMY);
 			}
+
 			@Override
 			protected String hoverText() {
 				return Messages.get(WndJournal.AlchemyTab.class, "title");
 			}
 		};
 		btnAlchemy.icon(Icons.ALCHEMY.get());
-		btnAlchemy.setRect(btnGuide.right()-2, btnBadges.top(), pw/4f + 1.5f, lastIDX == 3 ? 25 : 20);
+		btnAlchemy.setRect(btnGuide.right() - 2, btnBadges.top(), pw / 4f + 1.5f, lastIDX == TAB_ALCHEMY ? 25 : 20);
 		align(btnAlchemy);
-		if (lastIDX != 3) btnAlchemy.icon().brightness(0.6f);
 		addToBack(btnAlchemy);
 
-		addToBack(BG);
+		updateTabFocusVisuals();
+	}
 
-		ExitButton btnExit = new ExitButton();
-		btnExit.setPos( insets.left + w - btnExit.width(), insets.top );
-		add( btnExit );
+	private void registerKeyboardNavigation() {
 
-		fadeIn();
+		updateTabFocusVisuals();
+
+		keyboardNavListener = new Signal.Listener<KeyEvent>() {
+			@Override
+			public boolean onSignal(KeyEvent event) {
+
+				if (!event.pressed) {
+					return false;
+				}
+
+				switch (event.code) {
+
+					case Input.Keys.LEFT:
+						switchJournalTab(lastIDX - 1);
+						return true;
+
+					case Input.Keys.RIGHT:
+					case Input.Keys.TAB:
+						switchJournalTab(lastIDX + 1);
+						return true;
+
+					case Input.Keys.UP:
+					case Input.Keys.DOWN:
+					case Input.Keys.ENTER:
+					case Input.Keys.SPACE:
+					case Input.Keys.HOME:
+					case Input.Keys.END:
+						return handleActiveTabKey(event.code);
+
+					case Input.Keys.ESCAPE:
+						ShatteredPixelDungeon.switchNoFade(TitleScene.class);
+						return true;
+				}
+
+				return false;
+			}
+		};
+
+		KeyEvent.addKeyListener(keyboardNavListener);
+	}
+
+	private boolean handleActiveTabKey(int keyCode) {
+
+		if (lastIDX == TAB_BADGES && badgesTab != null) {
+			return badgesTab.handleKeyboard(keyCode);
+		}
+
+		if (lastIDX == TAB_CATALOG && catalogTab != null) {
+			return catalogTab.handleKeyboard(keyCode);
+		}
+
+		if (lastIDX == TAB_GUIDE && guideTab != null) {
+			return guideTab.handleKeyboard(keyCode);
+		}
+
+		if (lastIDX == TAB_ALCHEMY && alchemyTab != null) {
+			return alchemyTab.handleKeyboard(keyCode);
+		}
+
+		return false;
+	}
+
+	private void switchJournalTab(int index) {
+
+		if (index < 0) {
+			index = TAB_COUNT - 1;
+		} else if (index >= TAB_COUNT) {
+			index = 0;
+		}
+
+		if (lastIDX != index) {
+			lastIDX = index;
+			ShatteredPixelDungeon.seamlessResetScene();
+		} else {
+			updateTabFocusVisuals();
+		}
+	}
+
+	private void updateTabFocusVisuals() {
+
+		updateButtonFocus(btnBadges, lastIDX == TAB_BADGES);
+		updateButtonFocus(btnCatalog, lastIDX == TAB_CATALOG);
+		updateButtonFocus(btnGuide, lastIDX == TAB_GUIDE);
+		updateButtonFocus(btnAlchemy, lastIDX == TAB_ALCHEMY);
+	}
+
+	private void updateButtonFocus(StyledButton button, boolean focused) {
+
+		if (button == null) {
+			return;
+		}
+
+		if (focused) {
+			button.alpha(1f);
+			button.textColor(Window.TITLE_COLOR);
+			if (button.icon() != null) {
+				button.icon().brightness(1.35f);
+			}
+		} else {
+			button.alpha(0.85f);
+			button.textColor(Window.WHITE);
+			if (button.icon() != null) {
+				button.icon().brightness(0.6f);
+			}
+		}
 	}
 
 	@Override
 	public void destroy() {
+
+		if (keyboardNavListener != null) {
+			KeyEvent.removeKeyListener(keyboardNavListener);
+			keyboardNavListener = null;
+		}
 
 		Badges.saveGlobal();
 
@@ -246,7 +375,6 @@ public class JournalScene extends PixelScene {
 
 	@Override
 	protected void onBackPressed() {
-		ShatteredPixelDungeon.switchNoFade( TitleScene.class );
+		ShatteredPixelDungeon.switchNoFade(TitleScene.class);
 	}
-
 }

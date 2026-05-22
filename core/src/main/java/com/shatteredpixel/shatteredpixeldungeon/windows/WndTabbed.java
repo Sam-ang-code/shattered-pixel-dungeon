@@ -28,6 +28,7 @@ import com.shatteredpixel.shatteredpixeldungeon.scenes.PixelScene;
 import com.shatteredpixel.shatteredpixeldungeon.ui.Button;
 import com.shatteredpixel.shatteredpixeldungeon.ui.RenderedTextBlock;
 import com.shatteredpixel.shatteredpixeldungeon.ui.Window;
+import com.shatteredpixel.shatteredpixeldungeon.ui.KeyboardFocusable;
 import com.watabou.input.KeyBindings;
 import com.watabou.input.KeyEvent;
 import com.watabou.noosa.Game;
@@ -45,7 +46,11 @@ public class WndTabbed extends Window {
 	protected Tab selected;
 
 	private Signal.Listener<KeyEvent> tabListener;
-	
+
+	protected boolean allowKeyboardTabCycle() {
+		return true;
+	}
+
 	public WndTabbed() {
 		super( 0, 0, Chrome.get( Chrome.Type.TAB_SET ) );
 
@@ -53,7 +58,7 @@ public class WndTabbed extends Window {
 			@Override
 			public boolean onSignal(KeyEvent keyEvent) {
 
-				if (!keyEvent.pressed && KeyBindings.getActionForKey(keyEvent) == SPDAction.CYCLE){
+				if (allowKeyboardTabCycle() && !keyEvent.pressed && KeyBindings.getActionForKey(keyEvent) == SPDAction.CYCLE){
 					int idx = tabs.indexOf(selected);
 					idx++;
 					if (idx >= tabs.size()) idx = 0;
@@ -76,20 +81,20 @@ public class WndTabbed extends Window {
 	protected Tab add(Tab tab ) {
 
 		tab.setPos( tabs.size() == 0 ?
-			-chrome.marginLeft() + 1 :
-			tabs.get( tabs.size() - 1 ).right(), height );
+				-chrome.marginLeft() + 1 :
+				tabs.get( tabs.size() - 1 ).right(), height );
 		tab.select( tab.selected );
 		super.add( tab );
-		
+
 		tabs.add( tab );
 
 		return tab;
 	}
-	
+
 	public void select( int index ) {
 		select( tabs.get( index ) );
 	}
-	
+
 	public void select( Tab tab ) {
 		if (tab != selected) {
 			for (Tab t : tabs) {
@@ -99,21 +104,21 @@ public class WndTabbed extends Window {
 					t.select( true );
 				}
 			}
-			
+
 			selected = tab;
 		}
 	}
-	
+
 	@Override
 	public void resize( int w, int h ) {
 		// -> super.resize(...)
 		this.width = w;
 		this.height = h;
-		
+
 		chrome.size(
-			width + chrome.marginHor(),
-			height + chrome.marginVer() );
-		
+				width + chrome.marginHor(),
+				height + chrome.marginVer() );
+
 		camera.resize( (int)chrome.width, chrome.marginTop() + height + tabHeight() );
 		camera.x = (int)(Game.width - camera.screenWidth()) / 2;
 		camera.y = (int)(Game.height - camera.screenHeight()) / 2;
@@ -124,14 +129,14 @@ public class WndTabbed extends Window {
 				camera.y / camera.zoom,
 				chrome.width(), chrome.height );
 		// <- super.resize(...)
-		
+
 		for (Tab tab : tabs) {
 			remove( tab );
 		}
-		
+
 		ArrayList<Tab> tabs = new ArrayList<>(this.tabs);
 		this.tabs.clear();
-		
+
 		for (Tab tab : tabs) {
 			add( tab );
 		}
@@ -151,50 +156,50 @@ public class WndTabbed extends Window {
 			PixelScene.align(tab);
 		}
 	}
-	
+
 	protected int tabHeight() {
 		return 25;
 	}
-	
+
 	protected void onClick( Tab tab ) {
 		select( tab );
 	}
-	
-	protected class Tab extends Button {
-		
+
+	protected class Tab extends Button implements KeyboardFocusable {
+
 		protected final int CUT = 5;
-		
+
 		protected boolean selected;
-		
+
 		protected NinePatch bg;
-		
+
 		@Override
 		protected void layout() {
 			super.layout();
-			
+
 			if (bg != null) {
 				bg.x = x;
 				bg.y = y;
 				bg.size( width, height );
 			}
 		}
-		
+
 		protected void select( boolean value ) {
-			
+
 			selected = value;
-			
+
 			if (bg != null) {
 				remove( bg );
 			}
-			
+
 			bg = Chrome.get( selected ?
-				Chrome.Type.TAB_SELECTED :
-				Chrome.Type.TAB_UNSELECTED );
+					Chrome.Type.TAB_SELECTED :
+					Chrome.Type.TAB_UNSELECTED );
 			addToBack( bg );
-			
+
 			layout();
 		}
-		
+
 		@Override
 		protected void onClick() {
 			if (!selected) {
@@ -202,69 +207,92 @@ public class WndTabbed extends Window {
 				WndTabbed.this.onClick(this);
 			}
 		}
+
+		@Override
+		public void onKeyboardFocus(boolean focused) {
+			if (bg != null) {
+				if (focused) bg.brightness(1.25f);
+				else bg.resetColor();
+			}
+		}
+
+		@Override
+		public void onKeyboardActivate() {
+			onClick();
+		}
+
+		@Override
+		public boolean onKeyboardLeft() {
+			return false;
+		}
+
+		@Override
+		public boolean onKeyboardRight() {
+			return false;
+		}
 	}
-	
+
 	protected class LabeledTab extends Tab {
-		
+
 		private RenderedTextBlock btLabel;
-		
+
 		public LabeledTab( String label ) {
-			
+
 			super();
-			
+
 			btLabel.text( label );
 		}
-		
+
 		@Override
 		protected void createChildren() {
 			super.createChildren();
-			
+
 			btLabel = PixelScene.renderTextBlock( 9 );
 			add( btLabel );
 		}
-		
+
 		@Override
 		protected void layout() {
 			super.layout();
-			
+
 			btLabel.setPos(
 					x + (width - btLabel.width()) / 2,
 					y + (height - btLabel.height()) / 2 - (selected ? 1 : 3)
 			);
 			PixelScene.align(btLabel);
 		}
-		
+
 		@Override
 		protected void select( boolean value ) {
 			super.select( value );
 			btLabel.alpha( selected ? 1.0f : 0.6f );
 		}
 	}
-	
+
 	protected class IconTab extends Tab {
-		
+
 		protected Image icon;
 		private RectF defaultFrame;
-		
+
 		public IconTab( Image icon ){
 			super();
-			
+
 			this.icon.copy(icon);
 			this.defaultFrame = icon.frame();
 		}
-		
+
 		@Override
 		protected void createChildren() {
 			super.createChildren();
-			
+
 			icon = new Image();
 			add( icon );
 		}
-		
+
 		@Override
 		protected void layout() {
 			super.layout();
-			
+
 			icon.frame(defaultFrame);
 			icon.x = x + (width - icon.width) / 2;
 			icon.y = y + (height - icon.height) / 2 - 1;
@@ -280,7 +308,7 @@ public class WndTabbed extends Window {
 			}
 			PixelScene.align(icon);
 		}
-		
+
 		@Override
 		protected void select( boolean value ) {
 			super.select( value );

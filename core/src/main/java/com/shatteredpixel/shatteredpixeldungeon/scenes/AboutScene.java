@@ -28,7 +28,9 @@ import com.shatteredpixel.shatteredpixeldungeon.ui.Icons;
 import com.shatteredpixel.shatteredpixeldungeon.ui.TitleBackground;
 import com.shatteredpixel.shatteredpixeldungeon.ui.RenderedTextBlock;
 import com.shatteredpixel.shatteredpixeldungeon.ui.ScrollPane;
+import com.shatteredpixel.shatteredpixeldungeon.ui.SpatialKeyboardNavigator;
 import com.shatteredpixel.shatteredpixeldungeon.ui.Window;
+import com.watabou.input.KeyEvent;
 import com.watabou.input.PointerEvent;
 import com.watabou.noosa.Camera;
 import com.watabou.noosa.ColorBlock;
@@ -37,8 +39,12 @@ import com.watabou.noosa.Image;
 import com.watabou.noosa.PointerArea;
 import com.watabou.noosa.ui.Component;
 import com.watabou.utils.RectF;
+import com.watabou.utils.Signal;
 
 public class AboutScene extends PixelScene {
+
+	private SpatialKeyboardNavigator keyboardNavigator;
+	private Signal.Listener<KeyEvent> keyboardNavListener;
 
 	@Override
 	public void create() {
@@ -209,26 +215,26 @@ public class AboutScene extends PixelScene {
 				null,
 				"Shattered Pixel Dungeon uses the following sound samples from _freesound.org_:\n\n" +
 
-				"Creative Commons Attribution License:\n" +
-				"_SFX ATTACK SWORD 001.wav_ by _JoelAudio_\n" +
-				"_Pack: Slingshots and Longbows_ by _saturdaysoundguy_\n" +
-				"_Cracking/Crunching, A.wav_ by _InspectorJ_\n" +
-				"_Extracting a sword.mp3_ by _Taira Komori_\n" +
-				"_Pack: Uni Sound Library_ by _timmy h123_\n\n" +
+						"Creative Commons Attribution License:\n" +
+						"_SFX ATTACK SWORD 001.wav_ by _JoelAudio_\n" +
+						"_Pack: Slingshots and Longbows_ by _saturdaysoundguy_\n" +
+						"_Cracking/Crunching, A.wav_ by _InspectorJ_\n" +
+						"_Extracting a sword.mp3_ by _Taira Komori_\n" +
+						"_Pack: Uni Sound Library_ by _timmy h123_\n\n" +
 
-				"Creative Commons Zero License:\n" +
-				"_Pack: Movie Foley: Swords_ by _Black Snow_\n" +
-				"_machine gun shot 2.flac_ by _qubodup_\n" +
-				"_m240h machine gun burst 4.flac_ by _qubodup_\n" +
-				"_Pack: Onomatopoeia_ by _Adam N_\n" +
-				"_Pack: Watermelon_ by _lolamadeus_\n" +
-				"_metal chain_ by _Mediapaja2009_\n" +
-				"_Pack: Sword Clashes Pack_ by _JohnBuhr_\n" +
-				"_Pack: Metal Clangs and Pings_ by _wilhellboy_\n" +
-				"_Pack: Stabbing Stomachs & Crushing Skulls_ by _TheFilmLook_\n" +
-				"_Sheep bleating_ by _zachrau_\n" +
-				"_Lemon,Juicy,Squeeze,Fruit.wav_ by _Filipe Chagas_\n" +
-				"_Lemon,Squeeze,Squishy,Fruit.wav_ by _Filipe Chagas_",
+						"Creative Commons Zero License:\n" +
+						"_Pack: Movie Foley: Swords_ by _Black Snow_\n" +
+						"_machine gun shot 2.flac_ by _qubodup_\n" +
+						"_m240h machine gun burst 4.flac_ by _qubodup_\n" +
+						"_Pack: Onomatopoeia_ by _Adam N_\n" +
+						"_Pack: Watermelon_ by _lolamadeus_\n" +
+						"_metal chain_ by _Mediapaja2009_\n" +
+						"_Pack: Sword Clashes Pack_ by _JohnBuhr_\n" +
+						"_Pack: Metal Clangs and Pings_ by _wilhellboy_\n" +
+						"_Pack: Stabbing Stomachs & Crushing Skulls_ by _TheFilmLook_\n" +
+						"_Sheep bleating_ by _zachrau_\n" +
+						"_Lemon,Juicy,Squeeze,Fruit.wav_ by _Filipe Chagas_\n" +
+						"_Lemon,Squeeze,Squishy,Fruit.wav_ by _Filipe Chagas_",
 				"freesound.org",
 				"https://www.freesound.org");
 		freesound.setRect(transifex.left()-10, transifex.bottom() + 8, colWidth+20, 0);
@@ -244,9 +250,37 @@ public class AboutScene extends PixelScene {
 		btnExit.setPos( Camera.main.width - btnExit.width() - ofs, ofs );
 		add( btnExit );
 
+		registerKeyboardNavigation();
+
 		//fadeIn();
 	}
-	
+
+	private void registerKeyboardNavigation() {
+		keyboardNavigator = new SpatialKeyboardNavigator();
+		keyboardNavigator.setOnEscape(new Runnable() {
+			@Override
+			public void run() {
+				ShatteredPixelDungeon.switchScene(TitleScene.class);
+			}
+		});
+		keyboardNavListener = new Signal.Listener<KeyEvent>() {
+			@Override
+			public boolean onSignal(KeyEvent event) {
+				return keyboardNavigator.handleKey(event);
+			}
+		};
+		KeyEvent.addKeyListener(keyboardNavListener);
+	}
+
+	@Override
+	public void destroy() {
+		super.destroy();
+		if (keyboardNavListener != null) {
+			KeyEvent.removeKeyListener(keyboardNavListener);
+			keyboardNavListener = null;
+		}
+	}
+
 	@Override
 	protected void onBackPressed() {
 		ShatteredPixelDungeon.switchScene(TitleScene.class);

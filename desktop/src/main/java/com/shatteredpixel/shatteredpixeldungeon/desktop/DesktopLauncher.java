@@ -62,10 +62,11 @@ public class DesktopLauncher {
 				SharedLibraryLoader.bitness = Architecture.Bitness._64;
 			}
 		}
-		
+
 		final String title;
 		if (DesktopLauncher.class.getPackage().getSpecificationTitle() == null){
-			title = System.getProperty("Specification-Title");
+			String fallbackTitle = System.getProperty("Specification-Title");
+			title = fallbackTitle == null ? "Shattered Pixel Dungeon" : fallbackTitle;
 		} else {
 			title = DesktopLauncher.class.getPackage().getSpecificationTitle();
 		}
@@ -114,16 +115,23 @@ public class DesktopLauncher {
 				System.exit(1);
 			}
 		});
-		
+
 		Game.version = DesktopLauncher.class.getPackage().getSpecificationVersion();
+
 		if (Game.version == null) {
 			Game.version = System.getProperty("Specification-Version");
 		}
-		
+
+		if (Game.version == null) {
+			Game.version = "0.0.0";
+		}
+
 		try {
-			Game.versionCode = Integer.parseInt(DesktopLauncher.class.getPackage().getImplementationVersion());
-		} catch (NumberFormatException e) {
-			Game.versionCode = Integer.parseInt(System.getProperty("Implementation-Version"));
+			Game.versionCode = Integer.parseInt(
+					DesktopLauncher.class.getPackage().getImplementationVersion()
+			);
+		} catch (Exception e) {
+			Game.versionCode = 0;
 		}
 
 		if (UpdateImpl.supportsUpdates()){
@@ -141,10 +149,16 @@ public class DesktopLauncher {
 		// (e.g. /.shatteredpixel/shatteredpixeldungeon), but we have too much existing save
 		// date to worry about transferring at this point.
 		String vendor = DesktopLauncher.class.getPackage().getImplementationTitle();
+
 		if (vendor == null) {
 			vendor = System.getProperty("Implementation-Title");
 		}
-		vendor = vendor.split("\\.")[1];
+
+		if (vendor == null || !vendor.contains(".")) {
+			vendor = "shatteredpixel";
+		} else {
+			vendor = vendor.split("\\.")[1];
+		}
 
 		String basePath = "";
 		Files.FileType baseFileType = null;

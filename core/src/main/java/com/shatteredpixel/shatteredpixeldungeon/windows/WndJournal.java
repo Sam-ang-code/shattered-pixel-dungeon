@@ -21,6 +21,7 @@
 
 package com.shatteredpixel.shatteredpixeldungeon.windows;
 
+import com.badlogic.gdx.Input;
 import com.shatteredpixel.shatteredpixeldungeon.Assets;
 import com.shatteredpixel.shatteredpixeldungeon.Badges;
 import com.shatteredpixel.shatteredpixeldungeon.Dungeon;
@@ -86,50 +87,50 @@ import java.util.ArrayList;
 import java.util.Collection;
 
 public class WndJournal extends WndTabbed {
-	
+
 	public static final int WIDTH_P     = 126;
 	public static final int HEIGHT_P    = 180;
-	
+
 	public static final int WIDTH_L     = 216;
 	public static final int HEIGHT_L    = 130;
-	
+
 	private static final int ITEM_HEIGHT	= 18;
-	
+
 	private GuideTab guideTab;
 	private AlchemyTab alchemyTab;
 	private NotesTab notesTab;
 	private CatalogTab catalogTab;
 	private BadgesTab badgesTab;
-	
+
 	public static int last_index = 0;
 
 	private static WndJournal INSTANCE = null;
-	
+
 	public WndJournal(){
 
 		if (INSTANCE != null){
 			INSTANCE.hide();
 		}
-		
+
 		int width = PixelScene.landscape() ? WIDTH_L : WIDTH_P;
 		int height = PixelScene.landscape() ? HEIGHT_L : HEIGHT_P;
-		
+
 		resize(width, height);
-		
+
 		guideTab = new GuideTab();
 		add(guideTab);
 		guideTab.setRect(0, 0, width, height);
 		guideTab.updateList();
-		
+
 		alchemyTab = new AlchemyTab();
 		add(alchemyTab);
 		alchemyTab.setRect(0, 0, width, height);
-		
+
 		notesTab = new NotesTab();
 		add(notesTab);
 		notesTab.setRect(0, 0, width, height);
 		notesTab.updateList();
-		
+
 		catalogTab = new CatalogTab();
 		add(catalogTab);
 		catalogTab.setRect(0, 0, width, height);
@@ -139,7 +140,7 @@ public class WndJournal extends WndTabbed {
 		add(badgesTab);
 		badgesTab.setRect(0, 0, width, height);
 		badgesTab.updateList();
-		
+
 		Tab[] tabs = {
 				new IconTab( Icons.JOURNAL.get() ) {
 					protected void select( boolean value ) {
@@ -206,9 +207,9 @@ public class WndJournal extends WndTabbed {
 		for (Tab tab : tabs) {
 			add( tab );
 		}
-		
+
 		layoutTabs();
-		
+
 		select(last_index);
 
 		INSTANCE = this;
@@ -216,12 +217,73 @@ public class WndJournal extends WndTabbed {
 
 	@Override
 	public boolean onSignal(KeyEvent event) {
-		if (event.pressed && KeyBindings.getActionForKey( event ) == SPDAction.JOURNAL) {
-			onBackPressed();
-			return true;
-		} else {
-			return super.onSignal(event);
+		if (event.pressed) {
+
+			switch (event.code) {
+				case Input.Keys.LEFT:
+					if (handleActiveTabKey(event.code)) {
+						return true;
+					}
+					selectRelativeTab(-1);
+					return true;
+
+				case Input.Keys.RIGHT:
+					if (handleActiveTabKey(event.code)) {
+						return true;
+					}
+					selectRelativeTab(1);
+					return true;
+
+				case Input.Keys.TAB:
+					selectRelativeTab(1);
+					return true;
+
+				case Input.Keys.ESCAPE:
+					onBackPressed();
+					return true;
+			}
+
+			if (KeyBindings.getActionForKey( event ) == SPDAction.JOURNAL) {
+				onBackPressed();
+				return true;
+			}
 		}
+
+		return super.onSignal(event);
+	}
+
+	private void selectRelativeTab(int direction) {
+		int count = tabs.size();
+
+		if (count <= 0) {
+			return;
+		}
+
+		last_index += direction;
+
+		if (last_index < 0) {
+			last_index = count - 1;
+		} else if (last_index >= count) {
+			last_index = 0;
+		}
+
+		select(last_index);
+	}
+
+	private boolean handleActiveTabKey(int keyCode) {
+		if (last_index == 0 && notesTab != null && notesTab.active) {
+			return notesTab.handleKeyboard(keyCode);
+		} else if (last_index == 1 && guideTab != null && guideTab.active) {
+			return guideTab.handleKeyboard(keyCode);
+		} else if (last_index == 2 && alchemyTab != null && alchemyTab.active) {
+			return alchemyTab.handleKeyboard(keyCode);
+		} else if (last_index == 3 && catalogTab != null && catalogTab.active) {
+			return catalogTab.handleKeyboard(keyCode);
+		} else if (last_index == 4 && badgesTab != null && badgesTab.active) {
+			return badgesTab.handleKeyboard(keyCode);
+		}
+
+		return false;
 	}
 
 	@Override
@@ -231,24 +293,25 @@ public class WndJournal extends WndTabbed {
 		alchemyTab.layout();
 		notesTab.layout();
 		catalogTab.layout();
+		badgesTab.layout();
 	}
-	
+
 	public static class GuideTab extends Component {
 
 		private ScrollingListPane list;
-		
+
 		@Override
 		protected void createChildren() {
 			list = new ScrollingListPane();
 			add( list );
 		}
-		
+
 		@Override
 		protected void layout() {
 			super.layout();
 			list.setRect( x, y, width, height);
 		}
-		
+
 		public void updateList(){
 			list.addTitle(Document.ADVENTURERS_GUIDE.title());
 
@@ -282,13 +345,17 @@ public class WndJournal extends WndTabbed {
 			list.setRect(x, y, width, height);
 		}
 
+		public boolean handleKeyboard(int keyCode) {
+			return false;
+		}
+
 	}
-	
+
 	public static class AlchemyTab extends Component {
-		
+
 		private RedButton[] pageButtons;
 		private static final int NUM_BUTTONS = 9;
-		
+
 		private static final int[] sprites = {
 				ItemSpriteSheet.SEED_HOLDER,
 				ItemSpriteSheet.STONE_HOLDER,
@@ -300,15 +367,15 @@ public class WndJournal extends WndTabbed {
 				ItemSpriteSheet.ELIXIR_HOLDER,
 				ItemSpriteSheet.SPELL_HOLDER
 		};
-		
+
 		public static int currentPageIdx   = 0;
-		
+
 		private IconTitle title;
 		private RenderedTextBlock body;
-		
+
 		private ScrollPane list;
 		private ArrayList<QuickRecipe> recipes = new ArrayList<>();
-		
+
 		@Override
 		protected void createChildren() {
 			pageButtons = new RedButton[NUM_BUTTONS];
@@ -329,21 +396,21 @@ public class WndJournal extends WndTabbed {
 				}
 				add( pageButtons[i] );
 			}
-			
+
 			title = new IconTitle();
 			title.icon( new ItemSprite(ItemSpriteSheet.ALCH_PAGE));
 			title.visible = false;
 
 			body = PixelScene.renderTextBlock(6);
-			
+
 			list = new ScrollPane(new Component());
 			add(list);
 		}
-		
+
 		@Override
 		protected void layout() {
 			super.layout();
-			
+
 			if (width() >= 180){
 				float buttonWidth = width()/pageButtons.length;
 				for (int i = 0; i < NUM_BUTTONS; i++) {
@@ -366,13 +433,13 @@ public class WndJournal extends WndTabbed {
 					}
 				}
 			}
-			
+
 			list.setRect(x, pageButtons[NUM_BUTTONS-1].bottom() + 1, width,
 					height - pageButtons[NUM_BUTTONS-1].bottom() + y - 1);
-			
+
 			updateList();
 		}
-		
+
 		public void updateList() {
 
 			if (currentPageIdx != -1 && !Document.ALCHEMY_GUIDE.isPageFound(currentPageIdx)){
@@ -386,11 +453,11 @@ public class WndJournal extends WndTabbed {
 					pageButtons[i].icon().resetColor();
 				}
 			}
-			
+
 			if (currentPageIdx == -1){
 				return;
 			}
-			
+
 			for (QuickRecipe r : recipes){
 				if (r != null) {
 					r.killAndErase();
@@ -398,25 +465,25 @@ public class WndJournal extends WndTabbed {
 				}
 			}
 			recipes.clear();
-			
+
 			Component content = list.content();
-			
+
 			content.clear();
-			
+
 			title.visible = true;
 			title.label(Document.ALCHEMY_GUIDE.pageTitle(currentPageIdx));
 			title.setRect(0, 0, width(), 10);
 			content.add(title);
-			
+
 			body.maxWidth((int)width());
 			body.text(Document.ALCHEMY_GUIDE.pageBody(currentPageIdx));
 			body.setPos(0, title.bottom());
 			content.add(body);
 
 			Document.ALCHEMY_GUIDE.readPage(currentPageIdx);
-			
+
 			ArrayList<QuickRecipe> toAdd = QuickRecipe.getRecipes(currentPageIdx);
-			
+
 			float left;
 			float top = body.bottom()+2;
 			int w;
@@ -426,14 +493,14 @@ public class WndJournal extends WndTabbed {
 					toAdd.remove(0);
 					top += 6;
 				}
-				
+
 				w = 0;
 				while(!toAdd.isEmpty() && toAdd.get(0) != null
 						&& w + toAdd.get(0).width() <= width()){
 					toAddThisRow.add(toAdd.remove(0));
 					w += toAddThisRow.get(0).width();
 				}
-				
+
 				float spacing = (width() - w)/(toAddThisRow.size() + 1);
 				left = spacing;
 				while (!toAddThisRow.isEmpty()){
@@ -450,11 +517,11 @@ public class WndJournal extends WndTabbed {
 					recipes.add(r);
 					content.add(r);
 				}
-				
+
 				if (!toAdd.isEmpty() && toAdd.get(0) == null){
 					toAdd.remove(0);
 				}
-				
+
 				if (!toAdd.isEmpty() && toAdd.get(0) != null) {
 					ColorBlock spacer = new ColorBlock(width(), 1, 0xFF222222);
 					spacer.y = top + 16;
@@ -469,25 +536,54 @@ public class WndJournal extends WndTabbed {
 			list.setSize(list.width(), list.height());
 			list.scrollTo(0, 0);
 		}
+
+		public boolean handleKeyboard(int keyCode) {
+			if (keyCode != Input.Keys.LEFT && keyCode != Input.Keys.RIGHT) {
+				return false;
+			}
+
+			int direction = keyCode == Input.Keys.RIGHT ? 1 : -1;
+
+			for (int attempts = 0; attempts < NUM_BUTTONS; attempts++) {
+				currentPageIdx += direction;
+
+				if (currentPageIdx < 0) {
+					currentPageIdx = NUM_BUTTONS - 1;
+				} else if (currentPageIdx >= NUM_BUTTONS) {
+					currentPageIdx = 0;
+				}
+
+				if (Document.ALCHEMY_GUIDE.isPageFound(currentPageIdx)) {
+					updateList();
+					return true;
+				}
+			}
+
+			return true;
+		}
 	}
-	
+
 	private static class NotesTab extends Component {
-		
+
+		public boolean handleKeyboard(int keyCode) {
+			return false;
+		}
+
 		private ScrollingGridPane grid;
 		private CustomNoteButton custom;
-		
+
 		@Override
 		protected void createChildren() {
 			grid = new ScrollingGridPane();
 			add(grid);
 		}
-		
+
 		@Override
 		protected void layout() {
 			super.layout();
 			grid.setRect( x, y, width, height);
 		}
-		
+
 		private void updateList(){
 
 			grid.addHeader("_" + Messages.get(this, "title") + "_", 9, true);
@@ -562,17 +658,21 @@ public class WndJournal extends WndTabbed {
 			grid.setRect(x, y, width, height);
 
 		}
-		
+
 	}
-	
+
 	public static class CatalogTab extends Component{
-		
+
+		public boolean handleKeyboard(int keyCode) {
+			return false;
+		}
+
 		private RedButton[] itemButtons;
 		private static final int NUM_BUTTONS = 4;
 
 		public static int currentItemIdx   = 0;
 		private static float[] scrollPositions = new float[NUM_BUTTONS];
-		
+
 		//sprite locations
 		private static final int EQUIP_IDX = 0;
 		private static final int CONSUM_IDX = 1;
@@ -580,7 +680,7 @@ public class WndJournal extends WndTabbed {
 		private static final int LORE_IDX = 3;
 
 		private ScrollingGridPane grid;
-		
+
 		@Override
 		protected void createChildren() {
 			itemButtons = new RedButton[NUM_BUTTONS];
@@ -609,31 +709,31 @@ public class WndJournal extends WndTabbed {
 			};
 			add( grid );
 		}
-		
+
 		@Override
 		protected void layout() {
 			super.layout();
-			
+
 			int perRow = NUM_BUTTONS;
 			float buttonWidth = width()/perRow;
-			
+
 			for (int i = 0; i < NUM_BUTTONS; i++) {
 				itemButtons[i].setRect(x +(i%perRow) * (buttonWidth),
 						y + (i/perRow) * (ITEM_HEIGHT ),
 						buttonWidth, ITEM_HEIGHT);
 				PixelScene.align(itemButtons[i]);
 			}
-			
+
 			grid.setRect(x,
 					itemButtons[NUM_BUTTONS-1].bottom() + 1,
 					width,
 					height - itemButtons[NUM_BUTTONS-1].height() - 1);
 		}
-		
+
 		public void updateList() {
-			
+
 			grid.clear();
-			
+
 			for (int i = 0; i < NUM_BUTTONS; i++){
 				if (i == currentItemIdx){
 					itemButtons[i].icon().color(TITLE_COLOR);
@@ -641,7 +741,7 @@ public class WndJournal extends WndTabbed {
 					itemButtons[i].icon().resetColor();
 				}
 			}
-			
+
 			grid.scrollTo( 0, 0 );
 
 			if (currentItemIdx == EQUIP_IDX) {
@@ -739,7 +839,7 @@ public class WndJournal extends WndTabbed {
 
 			grid.scrollTo(0, scrollPositions[currentItemIdx]);
 		}
-		
+
 	}
 
 	//also includes item-like things such as enchantments, glyphs, curses.
@@ -1070,6 +1170,10 @@ public class WndJournal extends WndTabbed {
 
 	public static class BadgesTab extends Component {
 
+		public boolean handleKeyboard(int keyCode) {
+			return false;
+		}
+
 		private RedButton btnLocal;
 		private RedButton btnGlobal;
 
@@ -1152,5 +1256,5 @@ public class WndJournal extends WndTabbed {
 		}
 
 	}
-	
+
 }

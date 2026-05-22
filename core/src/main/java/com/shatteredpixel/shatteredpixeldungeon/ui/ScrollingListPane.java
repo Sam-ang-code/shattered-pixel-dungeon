@@ -21,6 +21,7 @@
 
 package com.shatteredpixel.shatteredpixeldungeon.ui;
 
+import com.badlogic.gdx.Input;
 import com.shatteredpixel.shatteredpixeldungeon.scenes.PixelScene;
 import com.watabou.noosa.BitmapText;
 import com.watabou.noosa.ColorBlock;
@@ -32,6 +33,9 @@ import java.util.ArrayList;
 public class ScrollingListPane extends ScrollPane {
 
 	private ArrayList<Component> items = new ArrayList<>();
+	private ArrayList<ListItem> keyboardItems = new ArrayList<>();
+
+	private int focusedIndex = -1;
 
 	private static final int ITEM_HEIGHT	= 18;
 
@@ -55,6 +59,13 @@ public class ScrollingListPane extends ScrollPane {
 	public void addItem( ListItem item ){
 		content.add(item);
 		items.add(item);
+		keyboardItems.add(item);
+
+		if (focusedIndex == -1) {
+			focusedIndex = 0;
+			updateKeyboardFocus();
+		}
+
 		layout();
 	}
 
@@ -69,6 +80,102 @@ public class ScrollingListPane extends ScrollPane {
 	public synchronized void clear() {
 		content.clear();
 		items.clear();
+		keyboardItems.clear();
+		focusedIndex = -1;
+	}
+
+	public boolean handleKeyboard(int keyCode) {
+		if (keyboardItems.isEmpty()) {
+			return false;
+		}
+
+		if (focusedIndex < 0 || focusedIndex >= keyboardItems.size()) {
+			focusedIndex = 0;
+			updateKeyboardFocus();
+			scrollFocusedIntoView();
+		}
+
+		switch (keyCode) {
+			case Input.Keys.UP:
+				moveFocus(-1);
+				return true;
+
+			case Input.Keys.DOWN:
+			case Input.Keys.TAB:
+				moveFocus(1);
+				return true;
+
+			case Input.Keys.HOME:
+				focusedIndex = 0;
+				updateKeyboardFocus();
+				scrollFocusedIntoView();
+				return true;
+
+			case Input.Keys.END:
+				focusedIndex = keyboardItems.size() - 1;
+				updateKeyboardFocus();
+				scrollFocusedIntoView();
+				return true;
+
+			case Input.Keys.ENTER:
+			case Input.Keys.SPACE:
+				activateFocusedItem();
+				return true;
+		}
+
+		return false;
+	}
+
+	private void moveFocus(int direction) {
+		if (keyboardItems.isEmpty()) {
+			return;
+		}
+
+		focusedIndex += direction;
+
+		if (focusedIndex < 0) {
+			focusedIndex = keyboardItems.size() - 1;
+		} else if (focusedIndex >= keyboardItems.size()) {
+			focusedIndex = 0;
+		}
+
+		updateKeyboardFocus();
+		scrollFocusedIntoView();
+	}
+
+	private void updateKeyboardFocus() {
+		for (int i = 0; i < keyboardItems.size(); i++) {
+			keyboardItems.get(i).setKeyboardFocused(i == focusedIndex);
+		}
+	}
+
+	private void activateFocusedItem() {
+		if (focusedIndex < 0 || focusedIndex >= keyboardItems.size()) {
+			return;
+		}
+
+		ListItem focused = keyboardItems.get(focusedIndex);
+		focused.keyboardClick();
+	}
+
+	private void scrollFocusedIntoView() {
+		if (focusedIndex < 0 || focusedIndex >= keyboardItems.size()) {
+			return;
+		}
+
+		ListItem focused = keyboardItems.get(focusedIndex);
+
+		float focusTop = focused.top();
+		float focusBottom = focused.bottom();
+
+		float viewTop = content.camera.scroll.y;
+		float viewBottom = viewTop + height();
+
+		if (focusTop < viewTop) {
+			scrollTo(0, Math.max(0, focusTop - 2));
+		} else if (focusBottom > viewBottom) {
+			scrollTo(0, Math.max(0, focusBottom - height() + 2));
+		}
 	}
 
 	@Override
@@ -82,6 +189,7 @@ public class ScrollingListPane extends ScrollPane {
 		}
 
 		content.setSize(width, pos);
+		updateKeyboardFocus();
 	}
 
 	public static class ListItem extends Component {
@@ -90,6 +198,8 @@ public class ScrollingListPane extends ScrollPane {
 		protected BitmapText iconLabel;
 		protected RenderedTextBlock label;
 		protected ColorBlock line;
+
+		private boolean keyboardFocused = false;
 
 		public ListItem( Image icon, String text ) {
 			this(icon, null, text);
@@ -116,6 +226,30 @@ public class ScrollingListPane extends ScrollPane {
 
 		public boolean onClick( float x, float y ){
 			return false;
+		}
+
+		public void keyboardClick() {
+			onClick(x + width() / 2f, y + height() / 2f);
+		}
+
+		public void setKeyboardFocused(boolean focused) {
+			keyboardFocused = focused;
+
+			if (focused) {
+				label.hardlight(Window.TITLE_COLOR);
+				iconLabel.hardlight(Window.TITLE_COLOR);
+				line.hardlight(Window.TITLE_COLOR);
+				if (icon != null) icon.brightness(1.25f);
+			} else {
+				label.resetColor();
+				iconLabel.resetColor();
+				line.resetColor();
+				if (icon != null) icon.resetColor();
+			}
+		}
+
+		public boolean isKeyboardFocused() {
+			return keyboardFocused;
 		}
 
 		public void hardlight( int color ){

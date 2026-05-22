@@ -1,24 +1,15 @@
 /*
- * Pixel Dungeon
- * Copyright (C) 2012-2015 Oleg Dolya
- *
- * Shattered Pixel Dungeon
- * Copyright (C) 2014-2026 Evan Debenham
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>
- */
-
+		* Pixel Dungeon
+		* Copyright (C) 2012-2015 Oleg Dolya
+		*
+		* Shattered Pixel Dungeon
+		* Copyright (C) 2014-2026 Evan Debenham
+		*
+		* This program is free software: you can redistribute it and/or modify
+		* it under the terms of the GNU General Public License as published by
+		* the Free Software Foundation, either version 3 of the License, or
+		* (at your option) any later version.
+		*/
 package com.shatteredpixel.shatteredpixeldungeon.scenes;
 
 import com.shatteredpixel.shatteredpixeldungeon.Assets;
@@ -39,6 +30,7 @@ import com.shatteredpixel.shatteredpixeldungeon.sprites.CharSprite;
 import com.shatteredpixel.shatteredpixeldungeon.ui.ExitButton;
 import com.shatteredpixel.shatteredpixeldungeon.ui.IconButton;
 import com.shatteredpixel.shatteredpixeldungeon.ui.Icons;
+import com.shatteredpixel.shatteredpixeldungeon.ui.SpatialKeyboardNavigator;
 import com.shatteredpixel.shatteredpixeldungeon.ui.StyledButton;
 import com.shatteredpixel.shatteredpixeldungeon.ui.TitleBackground;
 import com.shatteredpixel.shatteredpixeldungeon.ui.Window;
@@ -46,6 +38,7 @@ import com.shatteredpixel.shatteredpixeldungeon.windows.WndOptions;
 import com.shatteredpixel.shatteredpixeldungeon.windows.WndSettings;
 import com.shatteredpixel.shatteredpixeldungeon.windows.WndVictoryCongrats;
 import com.watabou.glwrap.Blending;
+import com.watabou.input.KeyEvent;
 import com.watabou.input.PointerEvent;
 import com.watabou.noosa.BitmapText;
 import com.watabou.noosa.Camera;
@@ -58,6 +51,7 @@ import com.watabou.utils.ColorMath;
 import com.watabou.utils.DeviceCompat;
 import com.watabou.utils.GameMath;
 import com.watabou.utils.RectF;
+import com.watabou.utils.Signal;
 
 import java.util.Date;
 
@@ -81,9 +75,12 @@ public class TitleScene extends PixelScene {
 	private IconButton btnFade;
 	private ExitButton btnExit;
 
+	private SpatialKeyboardNavigator keyboardNavigator;
+	private Signal.Listener<KeyEvent> keyboardNavListener;
+
 	@Override
 	public void create() {
-		
+
 		super.create();
 
 		Music.INSTANCE.playTracks(
@@ -92,7 +89,7 @@ public class TitleScene extends PixelScene {
 				false);
 
 		uiCamera.visible = false;
-		
+
 		int w = Camera.main.width;
 		int h = Camera.main.height;
 
@@ -143,7 +140,7 @@ public class TitleScene extends PixelScene {
 		add( signs );
 
 		final Chrome.Type GREY_TR = Chrome.Type.GREY_BUTTON_TR;
-		
+
 		btnPlay = new StyledButton(GREY_TR, Messages.get(this, "enter")){
 			@Override
 			protected void onClick() {
@@ -155,10 +152,9 @@ public class TitleScene extends PixelScene {
 					ShatteredPixelDungeon.switchNoFade( StartScene.class );
 				}
 			}
-			
+
 			@Override
 			protected boolean onLongClick() {
-				//making it easier to start runs quickly while debugging
 				if (DeviceCompat.isDebug()) {
 					GamesInProgress.selectedClass = null;
 					GamesInProgress.curSlot = 1;
@@ -212,7 +208,7 @@ public class TitleScene extends PixelScene {
 		};
 		btnAbout.icon(Icons.get(Icons.SHPX));
 		add(btnAbout);
-		
+
 		final int BTN_HEIGHT = 20;
 		int GAP = (int)(h - topRegion - (landscape() ? 3 : 4)*BTN_HEIGHT)/3;
 		GAP /= landscape() ? 3 : 5;
@@ -301,7 +297,45 @@ public class TitleScene extends PixelScene {
 			add(new WndVictoryCongrats());
 		}
 
+		registerKeyboardNavigation(btnPlay, btnSupport, btnRankings, btnJournal, btnNews, btnChanges, btnSettings, btnAbout);
+
 		fadeIn();
+	}
+
+	private void registerKeyboardNavigation(StyledButton... buttons) {
+		keyboardNavigator = new SpatialKeyboardNavigator();
+
+		for (StyledButton button : buttons) {
+			keyboardNavigator.add(button);
+		}
+
+		keyboardNavigator.setOnEscape(new Runnable() {
+			@Override
+			public void run() {
+				Game.instance.finish();
+			}
+		});
+
+		keyboardNavigator.updateFocus();
+
+		keyboardNavListener = new Signal.Listener<KeyEvent>() {
+			@Override
+			public boolean onSignal(KeyEvent event) {
+				return keyboardNavigator.handleKey(event);
+			}
+		};
+
+		KeyEvent.addKeyListener(keyboardNavListener);
+	}
+
+	@Override
+	public void destroy() {
+		super.destroy();
+
+		if (keyboardNavListener != null) {
+			KeyEvent.removeKeyListener(keyboardNavListener);
+			keyboardNavListener = null;
+		}
 	}
 
 	private float uiAlpha;
@@ -312,7 +346,6 @@ public class TitleScene extends PixelScene {
 		title.am = alpha;
 		leftFB.am = alpha;
 		rightFB.am = alpha;
-		//signs.am = alpha; handles this itself
 
 		btnPlay.enable(alpha != 0);
 		btnSupport.enable(alpha != 0);
@@ -332,13 +365,16 @@ public class TitleScene extends PixelScene {
 		btnSettings.alpha(alpha);
 		btnAbout.alpha(alpha);
 
+		if (alpha != 0 && keyboardNavigator != null) {
+			keyboardNavigator.updateFocus();
+		}
+
 		version.alpha(alpha);
 		btnFade.icon().alpha(alpha);
 		if (btnExit != null){
 			btnExit.enable(alpha != 0);
 			btnExit.icon().alpha(alpha);
 		}
-
 	}
 
 	private Fireball placeTorch(float x, float y ) {
@@ -442,7 +478,6 @@ public class TitleScene extends PixelScene {
 				ShatteredPixelDungeon.switchNoFade( ChangesScene.class );
 			}
 		}
-
 	}
 
 	private static class SettingsButton extends StyledButton {

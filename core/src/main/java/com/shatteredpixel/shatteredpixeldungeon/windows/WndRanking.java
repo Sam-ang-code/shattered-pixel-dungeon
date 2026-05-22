@@ -21,6 +21,7 @@
 
 package com.shatteredpixel.shatteredpixeldungeon.windows;
 
+import com.badlogic.gdx.Input;
 import com.shatteredpixel.shatteredpixeldungeon.Assets;
 import com.shatteredpixel.shatteredpixeldungeon.Badges;
 import com.shatteredpixel.shatteredpixeldungeon.Challenges;
@@ -52,6 +53,7 @@ import com.shatteredpixel.shatteredpixeldungeon.ui.TalentButton;
 import com.shatteredpixel.shatteredpixeldungeon.ui.TalentsPane;
 import com.shatteredpixel.shatteredpixeldungeon.ui.Window;
 import com.shatteredpixel.shatteredpixeldungeon.utils.DungeonSeed;
+import com.watabou.input.KeyEvent;
 import com.watabou.noosa.ColorBlock;
 import com.watabou.noosa.Game;
 import com.watabou.noosa.Group;
@@ -59,22 +61,27 @@ import com.watabou.noosa.Image;
 import com.watabou.noosa.audio.Sample;
 import com.watabou.noosa.ui.Component;
 import com.watabou.utils.DeviceCompat;
+import com.watabou.utils.Signal;
 
 import java.text.NumberFormat;
 import java.util.Locale;
 
 public class WndRanking extends WndTabbed {
-	
+
 	private static final int WIDTH			= 115;
 	private static final int HEIGHT			= 144;
-	
+
 	private static WndRanking INSTANCE;
-	
+
 	private String gameID;
 	private Rankings.Record record;
-	
+
+	private int selectedTabIndex = 0;
+	private int tabCount = 0;
+	private Signal.Listener<KeyEvent> keyboardNavListener;
+
 	public WndRanking( final Rankings.Record rec ) {
-		
+
 		super();
 		resize( WIDTH, HEIGHT );
 
@@ -96,15 +103,71 @@ public class WndRanking extends WndTabbed {
 			createControls();
 		}
 	}
-	
+
 	@Override
 	public void destroy() {
+		if (keyboardNavListener != null) {
+			KeyEvent.removeKeyListener(keyboardNavListener);
+			keyboardNavListener = null;
+		}
+
 		super.destroy();
 		if (INSTANCE == this){
 			INSTANCE = null;
 		}
 	}
-	
+
+	private void registerKeyboardNavigation() {
+		if (keyboardNavListener != null) {
+			KeyEvent.removeKeyListener(keyboardNavListener);
+			keyboardNavListener = null;
+		}
+
+		keyboardNavListener = new Signal.Listener<KeyEvent>() {
+			@Override
+			public boolean onSignal(KeyEvent event) {
+				if (!event.pressed) {
+					return false;
+				}
+
+				switch (event.code) {
+					case Input.Keys.LEFT:
+						moveRankingTab(-1);
+						return true;
+
+					case Input.Keys.RIGHT:
+					case Input.Keys.TAB:
+						moveRankingTab(1);
+						return true;
+
+					case Input.Keys.ESCAPE:
+						hide();
+						return true;
+				}
+
+				return false;
+			}
+		};
+
+		KeyEvent.addKeyListener(keyboardNavListener);
+	}
+
+	private void moveRankingTab(int direction) {
+		if (tabCount <= 1) {
+			return;
+		}
+
+		selectedTabIndex += direction;
+
+		if (selectedTabIndex < 0) {
+			selectedTabIndex = tabCount - 1;
+		} else if (selectedTabIndex >= tabCount) {
+			selectedTabIndex = 0;
+		}
+
+		select(selectedTabIndex);
+	}
+
 	private void createControls() {
 
 		if (Dungeon.hero != null) {
@@ -114,6 +177,8 @@ public class WndRanking extends WndTabbed {
 					{new StatsTab(), new TalentsTab(), new ItemsTab(), new BadgesTab(), null};
 
 			if (Dungeon.challenges != 0) pages[4] = new ChallengesTab();
+
+			tabCount = 0;
 
 			for (int i = 0; i < pages.length; i++) {
 
@@ -125,27 +190,32 @@ public class WndRanking extends WndTabbed {
 
 				Tab tab = new RankingTab(icons[i], pages[i]);
 				add(tab);
+				tabCount++;
 			}
 
 			layoutTabs();
 
+			selectedTabIndex = 0;
 			select(0);
+			registerKeyboardNavigation();
 		} else {
+			tabCount = 0;
 			StatsTab tab = new StatsTab();
 			add(tab);
+			registerKeyboardNavigation();
 
 		}
 	}
 
 	private class RankingTab extends IconTab {
-		
+
 		private Group page;
-		
+
 		public RankingTab( Icons icon, Group page ) {
 			super( Icons.get(icon) );
 			this.page = page;
 		}
-		
+
 		@Override
 		protected void select( boolean value ) {
 			super.select( value );
@@ -154,19 +224,19 @@ public class WndRanking extends WndTabbed {
 			}
 		}
 	}
-	
+
 	private class StatsTab extends Group {
 
 		private int GAP	= 4;
-		
+
 		public StatsTab() {
 			super();
-			
+
 			String heroClass = record.heroClass.name();
 			if (Dungeon.hero != null){
 				heroClass = Dungeon.hero.className();
 			}
-			
+
 			IconTitle title = new IconTitle();
 			title.icon( HeroSprite.avatar( record.heroClass, record.armorTier ) );
 			title.label( Messages.get(this, "title", record.herolevel, heroClass ).toUpperCase( Locale.ENGLISH ) );
@@ -177,7 +247,7 @@ public class WndRanking extends WndTabbed {
 			if (Dungeon.hero != null && Dungeon.seed != -1){
 				GAP--;
 			}
-			
+
 			float pos = title.bottom() + 1;
 
 			RenderedTextBlock date = PixelScene.renderTextBlock(record.date, 7);
@@ -295,7 +365,7 @@ public class WndRanking extends WndTabbed {
 			}
 
 		}
-		
+
 		private float statSlot( Group parent, String label, String value, float pos ) {
 
 			int size = 7;
@@ -316,7 +386,7 @@ public class WndRanking extends WndTabbed {
 			txt.setPos(WIDTH * 0.55f, pos + (6 - txt.height())/2);
 			PixelScene.align(txt);
 			parent.add( txt );
-			
+
 			return pos + GAP + txt.height();
 		}
 	}
@@ -347,12 +417,12 @@ public class WndRanking extends WndTabbed {
 	}
 
 	private class ItemsTab extends Group {
-		
+
 		private float pos;
-		
+
 		public ItemsTab() {
 			super();
-			
+
 			Belongings stuff = Dungeon.hero.belongings;
 			if (stuff.weapon != null) {
 				addItem( stuff.weapon );
@@ -406,21 +476,21 @@ public class WndRanking extends WndTabbed {
 				}
 			}
 		}
-		
+
 		private void addItem( Item item ) {
 			ItemButton slot = new ItemButton( item );
 			slot.setRect( 0, pos, width, ItemButton.HEIGHT );
 			add( slot );
-			
+
 			pos += slot.height() + 1;
 		}
 	}
-	
+
 	private class BadgesTab extends Group {
-		
+
 		public BadgesTab() {
 			super();
-			
+
 			camera = WndRanking.this.camera;
 
 			Component badges;
@@ -477,21 +547,21 @@ public class WndRanking extends WndTabbed {
 	}
 
 	private class ItemButton extends Button {
-		
+
 		public static final int HEIGHT	= 23;
-		
+
 		private Item item;
-		
+
 		private ItemSlot slot;
 		private ColorBlock bg;
 		private RenderedTextBlock name;
-		
+
 		public ItemButton( Item item ) {
-			
+
 			super();
 
 			this.item = item;
-			
+
 			slot.item( item );
 			if (item.cursed && item.cursedKnown) {
 				bg.ra = +0.3f;
@@ -507,30 +577,30 @@ public class WndRanking extends WndTabbed {
 				}
 			}
 		}
-		
+
 		@Override
 		protected void createChildren() {
-			
+
 			bg = new ColorBlock( 28, HEIGHT, 0x9953564D );
 			add( bg );
-			
+
 			slot = new ItemSlot();
 			add( slot );
-			
+
 			name = PixelScene.renderTextBlock( 7 );
 			add( name );
-			
+
 			super.createChildren();
 		}
-		
+
 		@Override
 		protected void layout() {
 			bg.x = x;
 			bg.y = y;
-			
+
 			slot.setRect( x, y, 28, HEIGHT );
 			PixelScene.align(slot);
-			
+
 			name.maxWidth((int)(width - slot.width() - 2));
 			name.text(Messages.titleCase(item.name()));
 			name.setPos(
@@ -538,20 +608,20 @@ public class WndRanking extends WndTabbed {
 					y + (height - name.height()) / 2
 			);
 			PixelScene.align(name);
-			
+
 			super.layout();
 		}
-		
+
 		@Override
 		protected void onPointerDown() {
 			bg.brightness( 1.5f );
 			Sample.INSTANCE.play( Assets.Sounds.CLICK, 0.7f, 0.7f, 1.2f );
 		}
-		
+
 		protected void onPointerUp() {
 			bg.brightness( 1.0f );
 		}
-		
+
 		@Override
 		protected void onClick() {
 			Game.scene().add( new WndInfoItem( item ) );

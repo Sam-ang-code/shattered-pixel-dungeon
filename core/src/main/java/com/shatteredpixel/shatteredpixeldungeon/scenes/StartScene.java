@@ -21,6 +21,7 @@
 
 package com.shatteredpixel.shatteredpixeldungeon.scenes;
 
+import com.badlogic.gdx.Input;
 import com.shatteredpixel.shatteredpixeldungeon.Badges;
 import com.shatteredpixel.shatteredpixeldungeon.Chrome;
 import com.shatteredpixel.shatteredpixeldungeon.GamesInProgress;
@@ -38,27 +39,36 @@ import com.shatteredpixel.shatteredpixeldungeon.ui.StyledButton;
 import com.shatteredpixel.shatteredpixeldungeon.ui.Window;
 import com.shatteredpixel.shatteredpixeldungeon.windows.IconTitle;
 import com.shatteredpixel.shatteredpixeldungeon.windows.WndGameInProgress;
+import com.watabou.input.KeyEvent;
 import com.watabou.noosa.BitmapText;
 import com.watabou.noosa.Camera;
 import com.watabou.noosa.Game;
 import com.watabou.noosa.Image;
 import com.watabou.noosa.NinePatch;
 import com.watabou.utils.RectF;
+import com.watabou.utils.Signal;
 
 import java.util.ArrayList;
 
 public class StartScene extends PixelScene {
-	
+
 	private static final int SLOT_WIDTH = 120;
 	private static final int SLOT_HEIGHT = 22;
-	
+
+	private final ArrayList<SaveSlotButton> keyboardSlots = new ArrayList<>();
+	private StyledButton keyboardSortButton;
+	private int focusedIndex = 0;
+	private Signal.Listener<KeyEvent> keyboardNavListener;
+
 	@Override
 	public void create() {
 		super.create();
-		
+
 		Badges.loadGlobal();
 		Journal.loadGlobal();
-		
+		keyboardSlots.clear();
+		keyboardSortButton = null;
+
 		uiCamera.visible = false;
 
 		int w = Camera.main.width;
@@ -70,11 +80,11 @@ public class StartScene extends PixelScene {
 
 		w -= insets.left + insets.right;
 		h -= insets.top + insets.bottom;
-		
+
 		ExitButton btnExit = new ExitButton();
 		btnExit.setPos( insets.left + w - btnExit.width(), insets.top );
 		add( btnExit );
-		
+
 		IconTitle title = new IconTitle( Icons.ENTER.get(), Messages.get(this, "title"));
 		title.setSize(200, 0);
 		title.setPos(
@@ -83,9 +93,9 @@ public class StartScene extends PixelScene {
 		);
 		align(title);
 		add(title);
-		
+
 		ArrayList<GamesInProgress.Info> games = GamesInProgress.checkAll();
-		
+
 		int slotCount = Math.min(GamesInProgress.MAX_SLOTS, games.size()+1);
 		int slotGap = 10 - slotCount;
 		int slotsHeight = slotCount*SLOT_HEIGHT + (slotCount-1)* slotGap;
@@ -95,11 +105,11 @@ public class StartScene extends PixelScene {
 			slotGap--;
 			slotsHeight -= slotCount-1;
 		}
-		
+
 		float yPos = insets.top + (h - slotsHeight + title.bottom() + 2)/2f - 4;
 		yPos = Math.max(yPos, title.bottom()+2);
 		float slotLeft = insets.left + (w - SLOT_WIDTH) / 2f;
-		
+
 		for (GamesInProgress.Info game : games) {
 			SaveSlotButton existingGame = new SaveSlotButton();
 			existingGame.set(game.slot);
@@ -107,9 +117,10 @@ public class StartScene extends PixelScene {
 			yPos += SLOT_HEIGHT + slotGap;
 			align(existingGame);
 			add(existingGame);
-			
+			keyboardSlots.add(existingGame);
+
 		}
-		
+
 		if (games.size() < GamesInProgress.MAX_SLOTS){
 			SaveSlotButton newGame = new SaveSlotButton();
 			newGame.set(GamesInProgress.firstEmpty());
@@ -117,8 +128,9 @@ public class StartScene extends PixelScene {
 			yPos += SLOT_HEIGHT + slotGap;
 			align(newGame);
 			add(newGame);
+			keyboardSlots.add(newGame);
 		}
-		
+
 		GamesInProgress.curSlot = 0;
 
 		String sortText = "";
@@ -152,54 +164,158 @@ public class StartScene extends PixelScene {
 		} else {
 			btnSort.setRect(slotLeft, yPos, btnSort.reqWidth() + 4, 12);
 		}
-		if (games.size() >= 2) add(btnSort);
+		if (games.size() >= 2) {
+			add(btnSort);
+			keyboardSortButton = btnSort;
+		}
+
+		registerKeyboardNavigation();
 
 		fadeIn();
-		
+
 	}
+
+
+	private void registerKeyboardNavigation() {
+		focusedIndex = 0;
+		updateKeyboardFocus();
+
+		keyboardNavListener = new Signal.Listener<KeyEvent>() {
+			@Override
+			public boolean onSignal(KeyEvent event) {
+				if (!event.pressed) {
+					return false;
+				}
+
+				switch (event.code) {
+					case Input.Keys.DOWN:
+					case Input.Keys.RIGHT:
+					case Input.Keys.TAB:
+						moveFocus(1);
+						return true;
+
+					case Input.Keys.UP:
+					case Input.Keys.LEFT:
+						moveFocus(-1);
+						return true;
+
+					case Input.Keys.ENTER:
+					case Input.Keys.SPACE:
+						activateFocusedItem();
+						return true;
+
+					case Input.Keys.ESCAPE:
+						ShatteredPixelDungeon.switchNoFade(TitleScene.class);
+						return true;
+				}
+
+				return false;
+			}
+		};
+
+		KeyEvent.addKeyListener(keyboardNavListener);
+	}
+
+	private int focusableCount() {
+		return keyboardSlots.size() + (keyboardSortButton != null ? 1 : 0);
+	}
+
+	private void moveFocus(int direction) {
+		int count = focusableCount();
+		if (count == 0) {
+			return;
+		}
+
+		focusedIndex += direction;
+
+		// Industrial-style wrap navigation: moving past the end returns to the start.
+		if (focusedIndex < 0) {
+			focusedIndex = count - 1;
+		} else if (focusedIndex >= count) {
+			focusedIndex = 0;
+		}
+
+		updateKeyboardFocus();
+	}
+
+	private void updateKeyboardFocus() {
+		for (int i = 0; i < keyboardSlots.size(); i++) {
+			keyboardSlots.get(i).setKeyboardFocused(i == focusedIndex);
+		}
+
+		if (keyboardSortButton != null) {
+			if (focusedIndex == keyboardSlots.size()) {
+				keyboardSortButton.textColor(Window.TITLE_COLOR);
+				keyboardSortButton.alpha(1f);
+			} else {
+				keyboardSortButton.textColor(0xCCCCCC);
+				keyboardSortButton.alpha(0.85f);
+			}
+		}
+	}
+
+	private void activateFocusedItem() {
+		if (focusedIndex >= 0 && focusedIndex < keyboardSlots.size()) {
+			keyboardSlots.get(focusedIndex).keyboardClick();
+		} else if (keyboardSortButton != null && focusedIndex == keyboardSlots.size()) {
+			keyboardSortButton.keyboardClick();
+		}
+	}
+
+	@Override
+	public void destroy() {
+		if (keyboardNavListener != null) {
+			KeyEvent.removeKeyListener(keyboardNavListener);
+			keyboardNavListener = null;
+		}
+
+		super.destroy();
+	}
+
 
 	@Override
 	protected void onBackPressed() {
 		ShatteredPixelDungeon.switchNoFade( TitleScene.class );
 	}
-	
+
 	private static class SaveSlotButton extends Button {
-		
+
 		private NinePatch bg;
-		
+
 		private Image hero;
 		private RenderedTextBlock name;
 		private RenderedTextBlock lastPlayed;
-		
+
 		private Image steps;
 		private BitmapText depth;
 		private Image classIcon;
 		private BitmapText level;
-		
+
 		private int slot;
 		private boolean newGame;
-		
+		private boolean keyboardFocused;
+
 		@Override
 		protected void createChildren() {
 			super.createChildren();
-			
+
 			bg = Chrome.get(Chrome.Type.TOAST_TR);
 			add( bg );
-			
+
 			name = PixelScene.renderTextBlock(9);
 			add(name);
 
 			lastPlayed = PixelScene.renderTextBlock(6);
 			add(lastPlayed);
 		}
-		
+
 		public void set( int slot ){
 			this.slot = slot;
 			GamesInProgress.Info info = GamesInProgress.check(slot);
 			newGame = info == null;
 			if (newGame){
 				name.text( Messages.get(StartScene.class, "new"));
-				
+
 				if (hero != null){
 					remove(hero);
 					hero = null;
@@ -213,29 +329,29 @@ public class StartScene extends PixelScene {
 					level = null;
 				}
 			} else {
-				
+
 				if (info.subClass != HeroSubClass.NONE){
 					name.text(Messages.titleCase(info.subClass.title()));
 				} else {
 					name.text(Messages.titleCase(info.heroClass.title()));
 				}
-				
+
 				if (hero == null){
 					hero = new Image(info.heroClass.spritesheet(), 0, 15*info.armorTier, 12, 15);
 					add(hero);
-					
+
 					steps = new Image(Icons.get(Icons.STAIRS));
 					add(steps);
 					depth = new BitmapText(PixelScene.pixelFont);
 					add(depth);
-					
+
 					classIcon = new Image(Icons.get(info.heroClass));
 					add(classIcon);
 					level = new BitmapText(PixelScene.pixelFont);
 					add(level);
 				} else {
 					hero.copy(new Image(info.heroClass.spritesheet(), 0, 15*info.armorTier, 12, 15));
-					
+
 					classIcon.copy(Icons.get(info.heroClass));
 				}
 
@@ -253,13 +369,13 @@ public class StartScene extends PixelScene {
 				} else {
 					lastPlayed.text(Messages.get(StartScene.class, "months_ago", diff / (30L * 24 * 60 * 60_000)));
 				}
-				
+
 				depth.text(Integer.toString(info.depth));
 				depth.measure();
-				
+
 				level.text(Integer.toString(info.level));
 				level.measure();
-				
+
 				if (info.challenges > 0){
 					name.hardlight(Window.TITLE_COLOR);
 					lastPlayed.hardlight(Window.TITLE_COLOR);
@@ -281,25 +397,25 @@ public class StartScene extends PixelScene {
 				} else if (!info.customSeed.isEmpty()){
 					steps.hardlight(1f, 1.5f, 0.67f);
 				}
-				
+
 			}
-			
+
 			layout();
 		}
-		
+
 		@Override
 		protected void layout() {
 			super.layout();
-			
+
 			bg.x = x;
 			bg.y = y;
 			bg.size( width, height );
-			
+
 			if (hero != null){
 				hero.x = x+8;
 				hero.y = y + (height - hero.height())/2f;
 				align(hero);
-				
+
 				name.setPos(
 						hero.x + hero.width() + 6,
 						y + (height - name.height() - lastPlayed.height() - 2)/2f
@@ -310,23 +426,23 @@ public class StartScene extends PixelScene {
 						hero.x + hero.width() + 6,
 						name.bottom()+2
 				);
-				
+
 				classIcon.x = x + width - 24 + (16 - classIcon.width())/2f;
 				classIcon.y = y + (height - classIcon.height())/2f;
 				align(classIcon);
-				
+
 				level.x = classIcon.x + (classIcon.width() - level.width()) / 2f;
 				level.y = classIcon.y + (classIcon.height() - level.height()) / 2f + 1;
 				align(level);
-				
+
 				steps.x = x + width - 40 + (16 - steps.width())/2f;
 				steps.y = y + (height - steps.height())/2f;
 				align(steps);
-				
+
 				depth.x = steps.x + (steps.width() - depth.width()) / 2f;
 				depth.y = steps.y + (steps.height() - depth.height()) / 2f + 1;
 				align(depth);
-				
+
 			} else {
 				name.setPos(
 						x + (width - name.width())/2f,
@@ -334,10 +450,53 @@ public class StartScene extends PixelScene {
 				);
 				align(name);
 			}
-			
-			
+
+
 		}
-		
+
+		public void setKeyboardFocused(boolean keyboardFocused) {
+			this.keyboardFocused = keyboardFocused;
+
+			if (keyboardFocused) {
+				// Strong keyboard focus feedback: yellow text + brighter background/icons.
+				bg.brightness(1.35f);
+				bg.alpha(1f);
+
+				name.hardlight(Window.TITLE_COLOR);
+				lastPlayed.hardlight(Window.TITLE_COLOR);
+
+				if (hero != null) hero.brightness(1.2f);
+				if (steps != null) steps.brightness(1.15f);
+				if (classIcon != null) classIcon.brightness(1.2f);
+
+			} else {
+				bg.resetColor();
+				bg.alpha(0.92f);
+
+				if (hero != null) hero.resetColor();
+				if (steps != null) steps.resetColor();
+				if (classIcon != null) classIcon.resetColor();
+
+				if (!newGame) {
+					GamesInProgress.Info info = GamesInProgress.check(slot);
+					if (info != null && info.challenges > 0) {
+						name.hardlight(Window.TITLE_COLOR);
+						lastPlayed.hardlight(Window.TITLE_COLOR);
+					} else {
+						name.resetColor();
+						lastPlayed.resetColor();
+					}
+				} else {
+					name.resetColor();
+					lastPlayed.resetColor();
+				}
+			}
+		}
+
+		public void keyboardClick() {
+			onClick();
+		}
+
 		@Override
 		protected void onClick() {
 			if (newGame) {

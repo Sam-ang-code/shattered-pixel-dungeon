@@ -21,6 +21,7 @@
 
 package com.shatteredpixel.shatteredpixeldungeon.scenes;
 
+import com.badlogic.gdx.Input;
 import com.shatteredpixel.shatteredpixeldungeon.Assets;
 import com.shatteredpixel.shatteredpixeldungeon.Badges;
 import com.shatteredpixel.shatteredpixeldungeon.Dungeon;
@@ -43,6 +44,7 @@ import com.shatteredpixel.shatteredpixeldungeon.windows.IconTitle;
 import com.shatteredpixel.shatteredpixeldungeon.windows.WndDailies;
 import com.shatteredpixel.shatteredpixeldungeon.windows.WndRanking;
 import com.shatteredpixel.shatteredpixeldungeon.windows.WndVictoryCongrats;
+import com.watabou.input.KeyEvent;
 import com.watabou.noosa.BitmapText;
 import com.watabou.noosa.Camera;
 import com.watabou.noosa.Image;
@@ -50,9 +52,13 @@ import com.watabou.noosa.audio.Music;
 import com.watabou.utils.DeviceCompat;
 import com.watabou.utils.GameMath;
 import com.watabou.utils.RectF;
+import com.watabou.utils.Signal;
+
+
+import java.util.ArrayList;
 
 public class RankingsScene extends PixelScene {
-	
+
 	private static final float ROW_HEIGHT_MAX	= 20;
 	private static final float ROW_HEIGHT_MIN	= 12;
 
@@ -60,9 +66,13 @@ public class RankingsScene extends PixelScene {
 
 	private static final float GAP	= 4;
 
+	private final ArrayList<Record> keyboardRecords = new ArrayList<>();
+	private int focusedRecordIndex = 0;
+	private Signal.Listener<KeyEvent> keyboardNavListener;
+
 	@Override
 	public void create() {
-		
+
 		super.create();
 
 		Music.INSTANCE.playTracks(
@@ -71,7 +81,7 @@ public class RankingsScene extends PixelScene {
 				false);
 
 		uiCamera.visible = false;
-		
+
 		int w = Camera.main.width;
 		int h = Camera.main.height;
 		RectF insets = getCommonInsets();
@@ -83,6 +93,7 @@ public class RankingsScene extends PixelScene {
 		h -= insets.top + insets.bottom;
 
 		Rankings.INSTANCE.load();
+		keyboardRecords.clear();
 
 		IconTitle title = new IconTitle( Icons.RANKINGS.get(), Messages.get(this, "title"));
 		title.setSize(200, 0);
@@ -92,7 +103,7 @@ public class RankingsScene extends PixelScene {
 		);
 		align(title);
 		add(title);
-		
+
 		if (Rankings.INSTANCE.records.size() > 0) {
 
 			//attempts to give each record as much space as possible, ideally as much space as portrait mode
@@ -100,9 +111,9 @@ public class RankingsScene extends PixelScene {
 
 			float left = (w - Math.min( MAX_ROW_WIDTH, w )) / 2 + GAP;
 			float top = (h - rowHeight  * Rankings.INSTANCE.records.size()) / 2;
-			
+
 			int pos = 0;
-			
+
 			for (Rankings.Record rec : Rankings.INSTANCE.records) {
 				Record row = new Record( pos, pos == Rankings.INSTANCE.lastRecord, rec );
 				float offset = 0;
@@ -111,18 +122,19 @@ public class RankingsScene extends PixelScene {
 				}
 				row.setRect( insets.left + left+offset, insets.top + top + pos * rowHeight, w - left * 2, rowHeight );
 				add(row);
-				
+				keyboardRecords.add(row);
+
 				pos++;
 			}
-			
+
 			if (Rankings.INSTANCE.totalNumber >= Rankings.TABLE_SIZE) {
-				
+
 				RenderedTextBlock label = PixelScene.renderTextBlock( 8 );
 				label.hardlight( 0xCCCCCC );
 				label.setHightlighting(true, Window.SHPX_COLOR);
 				label.text( Messages.get(this, "total") + " _" + Rankings.INSTANCE.wonNumber + "_/" + Rankings.INSTANCE.totalNumber );
 				add( label );
-				
+
 				label.setPos(
 						insets.left + (w - label.width()) / 2,
 						insets.top + h - label.height() - 2*GAP
@@ -130,7 +142,7 @@ public class RankingsScene extends PixelScene {
 				align(label);
 
 			}
-			
+
 		} else {
 
 			RenderedTextBlock noRec = PixelScene.renderTextBlock(Messages.get(this, "no_games"), 8);
@@ -141,7 +153,7 @@ public class RankingsScene extends PixelScene {
 			);
 			align(noRec);
 			add(noRec);
-			
+
 		}
 
 		ExitButton btnExit = new ExitButton();
@@ -175,11 +187,91 @@ public class RankingsScene extends PixelScene {
 			add(new WndVictoryCongrats());
 		}
 
+		registerKeyboardNavigation();
+
 		fadeIn();
 	}
 
+
+	private void registerKeyboardNavigation() {
+		if (!keyboardRecords.isEmpty()) {
+			focusedRecordIndex = 0;
+			updateKeyboardFocus();
+		}
+
+		keyboardNavListener = new Signal.Listener<KeyEvent>() {
+			@Override
+			public boolean onSignal(KeyEvent event) {
+				if (!event.pressed) {
+					return false;
+				}
+
+				switch (event.code) {
+					case Input.Keys.DOWN:
+					case Input.Keys.RIGHT:
+					case Input.Keys.TAB:
+						moveRecordFocus(1);
+						return true;
+
+					case Input.Keys.UP:
+					case Input.Keys.LEFT:
+						moveRecordFocus(-1);
+						return true;
+
+					case Input.Keys.ENTER:
+					case Input.Keys.SPACE:
+						activateFocusedRecord();
+						return true;
+
+					case Input.Keys.ESCAPE:
+						ShatteredPixelDungeon.switchNoFade(TitleScene.class);
+						return true;
+				}
+
+				return false;
+			}
+		};
+
+		KeyEvent.addKeyListener(keyboardNavListener);
+	}
+
+	private void moveRecordFocus(int direction) {
+		if (keyboardRecords.isEmpty()) {
+			return;
+		}
+
+		focusedRecordIndex += direction;
+
+		// Wrap around, matching the rest of the keyboard-first menu UX.
+		if (focusedRecordIndex < 0) {
+			focusedRecordIndex = keyboardRecords.size() - 1;
+		} else if (focusedRecordIndex >= keyboardRecords.size()) {
+			focusedRecordIndex = 0;
+		}
+
+		updateKeyboardFocus();
+	}
+
+	private void updateKeyboardFocus() {
+		for (int i = 0; i < keyboardRecords.size(); i++) {
+			keyboardRecords.get(i).setKeyboardFocused(i == focusedRecordIndex);
+		}
+	}
+
+	private void activateFocusedRecord() {
+		if (focusedRecordIndex >= 0 && focusedRecordIndex < keyboardRecords.size()) {
+			keyboardRecords.get(focusedRecordIndex).keyboardClick();
+		}
+	}
+
+
 	@Override
 	public void destroy() {
+		if (keyboardNavListener != null) {
+			KeyEvent.removeKeyListener(keyboardNavListener);
+			keyboardNavListener = null;
+		}
+
 		super.destroy();
 		//so that opening daily records does not trigger WndDailies opening on future visits
 		Dungeon.daily = Dungeon.dailyReplay = false;
@@ -189,18 +281,23 @@ public class RankingsScene extends PixelScene {
 	protected void onBackPressed() {
 		ShatteredPixelDungeon.switchNoFade(TitleScene.class);
 	}
-	
+
 	public static class Record extends Button {
-		
+
 		private static final float GAP	= 4;
-		
+
+		private final ArrayList<Record> keyboardRecords = new ArrayList<>();
+		private int focusedRecordIndex = 0;
+		private Signal.Listener<KeyEvent> keyboardNavListener;
+
 		private static final int[] TEXT_WIN	= {0xFFFF88, 0xB2B25F};
 		private static final int[] TEXT_LOSE= {0xDDDDDD, 0x888888};
 		private static final int FLARE_WIN	= 0x888866;
 		private static final int FLARE_LOSE	= 0x666666;
-		
+
 		private Rankings.Record rec;
-		
+		private boolean keyboardFocused = false;
+
 		protected Image shield;
 		private Flare flare;
 		private BitmapText position;
@@ -209,12 +306,12 @@ public class RankingsScene extends PixelScene {
 		private BitmapText depth;
 		private Image classIcon;
 		private BitmapText level;
-		
+
 		public Record( int pos, boolean latest, Rankings.Record rec ) {
 			super();
-			
+
 			this.rec = rec;
-			
+
 			if (latest) {
 				flare = new Flare( 6, 24 );
 				flare.angularSpeed = 90;
@@ -227,11 +324,11 @@ public class RankingsScene extends PixelScene {
 			} else
 				position.text(" ");
 			position.measure();
-			
+
 			desc.text( Messages.titleCase(rec.desc()) );
 
 			int odd = pos % 2;
-			
+
 			if (rec.win) {
 				shield.copy( new ItemSprite(ItemSpriteSheet.AMULET, null) );
 				position.hardlight( TEXT_WIN[odd] );
@@ -273,51 +370,79 @@ public class RankingsScene extends PixelScene {
 				level.measure();
 				add(level);
 			}
-			
+
 			classIcon.copy( Icons.get( rec.heroClass ) );
 			if (rec.heroClass == HeroClass.ROGUE){
 				//cloak of shadows needs to be brightened a bit
 				classIcon.brightness(2f);
 			}
 		}
-		
+
+		public void setKeyboardFocused(boolean keyboardFocused) {
+			this.keyboardFocused = keyboardFocused;
+
+			if (keyboardFocused) {
+				desc.hardlight(Window.TITLE_COLOR);
+				shield.brightness(1.25f);
+				classIcon.brightness(1.2f);
+				if (steps != null) steps.brightness(1.15f);
+				if (flare != null) flare.visible = true;
+
+			} else {
+				desc.resetColor();
+				shield.resetColor();
+				classIcon.resetColor();
+				if (steps != null) steps.resetColor();
+				if (flare != null) flare.visible = false;
+
+				// Preserve Rogue cloak brightness after focus leaves.
+				if (rec.heroClass == HeroClass.ROGUE) {
+					classIcon.brightness(2f);
+				}
+			}
+		}
+
+		public void keyboardClick() {
+			onClick();
+		}
+
 		@Override
 		protected void createChildren() {
-			
+
 			super.createChildren();
-			
+
 			shield = new Image(new ItemSprite( ItemSpriteSheet.TOMB, null ));
 			add( shield );
-			
+
 			position = new BitmapText( PixelScene.pixelFont);
 			add( position );
-			
+
 			desc = renderTextBlock( 7 );
 			add( desc );
 
 			depth = new BitmapText( PixelScene.pixelFont);
 
 			steps = new Image();
-			
+
 			classIcon = new Image();
 			add( classIcon );
 
 			level = new BitmapText( PixelScene.pixelFont);
 		}
-		
+
 		@Override
 		protected void layout() {
-			
+
 			super.layout();
-			
+
 			shield.x = x + (16 - shield.width) / 2f;
 			shield.y = y + (height - shield.height) / 2f;
 			align(shield);
-			
+
 			position.x = shield.x + (shield.width - position.width()) / 2f;
 			position.y = shield.y + (shield.height - position.height()) / 2f + 1;
 			align(position);
-			
+
 			if (flare != null) {
 				flare.point( shield.center() );
 			}
@@ -342,7 +467,7 @@ public class RankingsScene extends PixelScene {
 			desc.setPos(x + 16 + GAP, shield.y + (shield.height - desc.height()) / 2f + 1);
 			align(desc);
 		}
-		
+
 		@Override
 		protected void onClick() {
 			parent.add( new WndRanking( rec ) );

@@ -29,20 +29,26 @@ import com.shatteredpixel.shatteredpixeldungeon.ui.ExitButton;
 import com.shatteredpixel.shatteredpixeldungeon.ui.Icons;
 import com.shatteredpixel.shatteredpixeldungeon.ui.TitleBackground;
 import com.shatteredpixel.shatteredpixeldungeon.ui.RenderedTextBlock;
+import com.shatteredpixel.shatteredpixeldungeon.ui.SpatialKeyboardNavigator;
 import com.shatteredpixel.shatteredpixeldungeon.ui.StyledButton;
 import com.shatteredpixel.shatteredpixeldungeon.ui.Window;
 import com.shatteredpixel.shatteredpixeldungeon.windows.IconTitle;
+import com.watabou.input.KeyEvent;
 import com.watabou.noosa.Camera;
 import com.watabou.noosa.Image;
 import com.watabou.noosa.NinePatch;
 import com.watabou.noosa.ui.Component;
 import com.watabou.utils.Callback;
 import com.watabou.utils.RectF;
+import com.watabou.utils.Signal;
 
 public class SupporterScene extends PixelScene {
 
 	private static final int BTN_HEIGHT = 22;
 	private static final int GAP = 2;
+
+	private SpatialKeyboardNavigator keyboardNavigator;
+	private Signal.Listener<KeyEvent> keyboardNavListener;
 
 	@Override
 	public void create() {
@@ -107,6 +113,42 @@ public class SupporterScene extends PixelScene {
 		link.setPos(left, msg.bottom()+GAP);
 		align(link);
 
+		registerKeyboardNavigation(link);
+	}
+
+	private void registerKeyboardNavigation(StyledButton... buttons) {
+		keyboardNavigator = new SpatialKeyboardNavigator();
+
+		for (StyledButton button : buttons) {
+			keyboardNavigator.add(button);
+		}
+
+		keyboardNavigator.setOnEscape(new Runnable() {
+			@Override
+			public void run() {
+				ShatteredPixelDungeon.switchNoFade(TitleScene.class);
+			}
+		});
+
+		keyboardNavigator.updateFocus();
+
+		keyboardNavListener = new Signal.Listener<KeyEvent>() {
+			@Override
+			public boolean onSignal(KeyEvent event) {
+				return keyboardNavigator.handleKey(event);
+			}
+		};
+
+		KeyEvent.addKeyListener(keyboardNavListener);
+	}
+
+	@Override
+	public void destroy() {
+		super.destroy();
+		if (keyboardNavListener != null) {
+			KeyEvent.removeKeyListener(keyboardNavListener);
+			keyboardNavListener = null;
+		}
 	}
 
 	@Override

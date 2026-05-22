@@ -32,6 +32,7 @@ import com.shatteredpixel.shatteredpixeldungeon.ui.Icons;
 import com.shatteredpixel.shatteredpixeldungeon.ui.TitleBackground;
 import com.shatteredpixel.shatteredpixeldungeon.ui.RenderedTextBlock;
 import com.shatteredpixel.shatteredpixeldungeon.ui.ScrollPane;
+import com.shatteredpixel.shatteredpixeldungeon.ui.SpatialKeyboardNavigator;
 import com.shatteredpixel.shatteredpixeldungeon.ui.StyledButton;
 import com.shatteredpixel.shatteredpixeldungeon.ui.changelist.ChangeInfo;
 import com.shatteredpixel.shatteredpixeldungeon.ui.changelist.WndChanges;
@@ -49,6 +50,7 @@ import com.shatteredpixel.shatteredpixeldungeon.ui.changelist.v1_X_Changes;
 import com.shatteredpixel.shatteredpixeldungeon.ui.changelist.v2_X_Changes;
 import com.shatteredpixel.shatteredpixeldungeon.ui.changelist.v3_X_Changes;
 import com.shatteredpixel.shatteredpixeldungeon.windows.IconTitle;
+import com.watabou.input.KeyEvent;
 import com.watabou.noosa.Camera;
 import com.watabou.noosa.Image;
 import com.watabou.noosa.NinePatch;
@@ -56,18 +58,22 @@ import com.watabou.noosa.Scene;
 import com.watabou.noosa.audio.Music;
 import com.watabou.noosa.ui.Component;
 import com.watabou.utils.RectF;
+import com.watabou.utils.Signal;
 
 import java.util.ArrayList;
 
 public class ChangesScene extends PixelScene {
-	
+
 	public static int changesSelected = 0;
 
 	private NinePatch rightPanel;
 	private ScrollPane rightScroll;
 	private IconTitle changeTitle;
 	private RenderedTextBlock changeBody;
-	
+
+	private SpatialKeyboardNavigator keyboardNavigator;
+	private Signal.Listener<KeyEvent> keyboardNavListener;
+
 	@Override
 	public void create() {
 		super.create();
@@ -145,7 +151,7 @@ public class ChangesScene extends PixelScene {
 		}
 		align( panel );
 		add( panel );
-		
+
 		final ArrayList<ChangeInfo> changeInfos = new ArrayList<>();
 
 		if (Messages.lang() != Languages.ENGLISH){
@@ -153,7 +159,7 @@ public class ChangesScene extends PixelScene {
 			langWarn.hardlight(CharSprite.WARNING);
 			changeInfos.add(langWarn);
 		}
-		
+
 		switch (changesSelected){
 			case 0: default:
 				v3_X_Changes.addAllChanges(changeInfos);
@@ -306,7 +312,7 @@ public class ChangesScene extends PixelScene {
 		if (changesSelected != 4) btn0_8.textColor( 0xBBBBBB );
 		btn0_8.setRect(btn0_9.right()-2, list.bottom(), 19, changesSelected == 4 ? 19 : 15);
 		addToBack(btn0_8);
-		
+
 		StyledButton btn0_7 = new StyledButton(Chrome.Type.GREY_BUTTON_TR, "0.7", 8){
 			@Override
 			protected void onClick() {
@@ -320,7 +326,7 @@ public class ChangesScene extends PixelScene {
 		if (changesSelected != 5) btn0_7.textColor( 0xBBBBBB );
 		btn0_7.setRect(btn0_8.right()-2, btn0_8.top(), 19, changesSelected == 5 ? 19 : 15);
 		addToBack(btn0_7);
-		
+
 		StyledButton btn0_6 = new StyledButton(Chrome.Type.GREY_BUTTON_TR, "0.6", 8){
 			@Override
 			protected void onClick() {
@@ -334,7 +340,7 @@ public class ChangesScene extends PixelScene {
 		if (changesSelected != 6) btn0_6.textColor( 0xBBBBBB );
 		btn0_6.setRect(btn0_7.right()-2, btn0_8.top(), 19, changesSelected == 6 ? 19 : 15);
 		addToBack(btn0_6);
-		
+
 		StyledButton btnOld = new StyledButton(Chrome.Type.GREY_BUTTON_TR, "0.5-", 8){
 			@Override
 			protected void onClick() {
@@ -349,9 +355,41 @@ public class ChangesScene extends PixelScene {
 		btnOld.setRect(btn0_6.right()-2, btn0_8.top(), 22, changesSelected == 7 ? 19 : 15);
 		addToBack(btnOld);
 
+		registerKeyboardNavigation(btn3_X, btn2_X, btn1_X, btn0_9, btn0_8, btn0_7, btn0_6, btnOld);
+
 		addToBack( BG );
 
 		fadeIn();
+	}
+
+	private void registerKeyboardNavigation(StyledButton... buttons) {
+		keyboardNavigator = new SpatialKeyboardNavigator();
+		for (StyledButton button : buttons) {
+			keyboardNavigator.add(button);
+		}
+		keyboardNavigator.setOnEscape(new Runnable() {
+			@Override
+			public void run() {
+				ShatteredPixelDungeon.switchNoFade(TitleScene.class);
+			}
+		});
+		keyboardNavigator.updateFocus();
+		keyboardNavListener = new Signal.Listener<KeyEvent>() {
+			@Override
+			public boolean onSignal(KeyEvent event) {
+				return keyboardNavigator.handleKey(event);
+			}
+		};
+		KeyEvent.addKeyListener(keyboardNavListener);
+	}
+
+	@Override
+	public void destroy() {
+		super.destroy();
+		if (keyboardNavListener != null) {
+			KeyEvent.removeKeyListener(keyboardNavListener);
+			keyboardNavListener = null;
+		}
 	}
 
 	private void updateChangesText(Image icon, String title, String... messages){
@@ -393,7 +431,7 @@ public class ChangesScene extends PixelScene {
 			s.addToFront(new WndChangesTabbed(icon, title, messages));
 		}
 	}
-	
+
 	@Override
 	protected void onBackPressed() {
 		ShatteredPixelDungeon.switchNoFade(TitleScene.class);

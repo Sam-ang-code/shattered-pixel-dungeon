@@ -21,6 +21,7 @@
 
 package com.shatteredpixel.shatteredpixeldungeon.windows;
 
+import com.badlogic.gdx.Input;
 import com.shatteredpixel.shatteredpixeldungeon.Assets;
 import com.shatteredpixel.shatteredpixeldungeon.Chrome;
 import com.shatteredpixel.shatteredpixeldungeon.SPDSettings;
@@ -35,12 +36,15 @@ import com.shatteredpixel.shatteredpixeldungeon.sprites.CharSprite;
 import com.shatteredpixel.shatteredpixeldungeon.ui.CheckBox;
 import com.shatteredpixel.shatteredpixeldungeon.ui.GameLog;
 import com.shatteredpixel.shatteredpixeldungeon.ui.Icons;
+import com.shatteredpixel.shatteredpixeldungeon.ui.KeyboardNode;
 import com.shatteredpixel.shatteredpixeldungeon.ui.OptionSlider;
 import com.shatteredpixel.shatteredpixeldungeon.ui.RedButton;
 import com.shatteredpixel.shatteredpixeldungeon.ui.RenderedTextBlock;
+import com.shatteredpixel.shatteredpixeldungeon.ui.SpatialKeyboardNavigator;
 import com.shatteredpixel.shatteredpixeldungeon.ui.Toolbar;
 import com.shatteredpixel.shatteredpixeldungeon.ui.Window;
 import com.watabou.input.ControllerHandler;
+import com.watabou.input.KeyEvent;
 import com.watabou.noosa.ColorBlock;
 import com.watabou.noosa.Game;
 import com.watabou.noosa.Image;
@@ -48,6 +52,7 @@ import com.watabou.noosa.audio.Sample;
 import com.watabou.noosa.ui.Component;
 import com.watabou.utils.DeviceCompat;
 import com.watabou.utils.Random;
+import com.watabou.utils.Signal;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -68,6 +73,10 @@ public class WndSettings extends WndTabbed {
 	private DataTab     data;
 	private AudioTab    audio;
 	private LangsTab    langs;
+
+	private SpatialKeyboardNavigator keyboardNavigator;
+	private Signal.Listener<KeyEvent> keyboardNavListener;
+	private KeyboardNode contentExitNode;
 
 	public static int last_index = 0;
 
@@ -197,10 +206,261 @@ public class WndSettings extends WndTabbed {
 			select(last_index);
 		}
 
+		registerKeyboardNavigation();
+
+	}
+
+
+	@Override
+	protected boolean allowKeyboardTabCycle() {
+		return false;
+	}
+
+	@Override
+	public void select(Tab tab) {
+		super.select(tab);
+		if (keyboardNavigator != null) {
+			rebuildKeyboardNavigator();
+		}
+	}
+
+	private void registerKeyboardNavigation() {
+		keyboardNavigator = new SpatialKeyboardNavigator();
+		keyboardNavigator.setOnEscape(new Runnable() {
+			@Override
+			public void run() {
+				hide();
+			}
+		});
+
+		rebuildKeyboardNavigator();
+
+		keyboardNavListener = new Signal.Listener<KeyEvent>() {
+			@Override
+			public boolean onSignal(KeyEvent event) {
+				if (!event.pressed) return false;
+
+				if (event.code == Input.Keys.ESCAPE) {
+					hide();
+					return true;
+				}
+
+				// Industrial-style tab navigation:
+				// PageUp/PageDown switch settings categories, while arrow keys stay inside the current panel.
+				if (event.code == Input.Keys.PAGE_UP) {
+					selectRelativeTab(-1);
+					return true;
+				}
+
+				if (event.code == Input.Keys.PAGE_DOWN) {
+					selectRelativeTab(1);
+					return true;
+				}
+
+				return keyboardNavigator != null && keyboardNavigator.handleKey(event);
+			}
+		};
+
+		KeyEvent.addKeyListener(keyboardNavListener);
+	}
+
+	private void rebuildKeyboardNavigator() {
+		if (keyboardNavigator == null) return;
+
+		keyboardNavigator.clear();
+		contentExitNode = null;
+		keyboardNavigator.setOnEscape(new Runnable() {
+			@Override
+			public void run() {
+				hide();
+			}
+		});
+
+		if (display.active) {
+			buildDisplayNavigation();
+		} else if (ui.active) {
+			buildUINavigation();
+		} else if (input != null && input.active) {
+			buildInputNavigation();
+		} else if (data.active) {
+			buildDataNavigation();
+		} else if (audio.active) {
+			buildAudioNavigation();
+		} else if (langs.active) {
+			buildLanguageNavigation();
+		}
+
+		buildSettingsTabNavigation();
+		keyboardNavigator.updateFocus();
+	}
+
+	private void buildDisplayNavigation() {
+		KeyboardNode fullscreen = addFocus(display.chkFullscreen);
+		KeyboardNode landscape = addFocus(display.chkLandscape);
+		KeyboardNode brightness = addFocus(display.optBrightness);
+		KeyboardNode visualGrid = addFocus(display.optVisGrid);
+		KeyboardNode cameraFollow = addFocus(display.optFollowIntensity);
+		KeyboardNode screenShake = addFocus(display.optScreenShake);
+
+		linkVertical(fullscreen, landscape);
+		linkVertical(landscape != null ? landscape : fullscreen, brightness);
+
+		linkHorizontal(brightness, visualGrid);
+		linkHorizontal(cameraFollow, screenShake);
+
+		linkVertical(brightness, cameraFollow);
+		linkVertical(visualGrid, screenShake);
+
+		contentExitNode = firstNonNull(screenShake, firstNonNull(cameraFollow, firstNonNull(visualGrid, firstNonNull(brightness, firstNonNull(landscape, fullscreen)))));
+	}
+
+	private void buildUINavigation() {
+		KeyboardNode uiMode = addFocus(ui.optUIMode);
+		KeyboardNode uiScale = addFocus(ui.optUIScale);
+		KeyboardNode toolbar = addFocus(ui.btnToolbarSettings);
+		KeyboardNode flipTags = addFocus(ui.chkFlipTags);
+		KeyboardNode font = addFocus(ui.chkFont);
+		KeyboardNode vibrate = addFocus(ui.chkVibrate);
+
+		linkHorizontal(uiMode, uiScale);
+		linkVertical(firstNonNull(uiMode, uiScale), firstNonNull(toolbar, flipTags));
+		linkVertical(firstNonNull(toolbar, flipTags), font);
+		linkHorizontal(font, vibrate);
+
+		contentExitNode = firstNonNull(vibrate, firstNonNull(font, firstNonNull(flipTags, firstNonNull(toolbar, firstNonNull(uiScale, uiMode)))));
+	}
+
+	private void buildInputNavigation() {
+		KeyboardNode keyBindings = addFocus(input.btnKeyBindings);
+		KeyboardNode controllerBindings = addFocus(input.btnControllerBindings);
+		KeyboardNode controlSens = addFocus(input.optControlSens);
+		KeyboardNode holdMoveSens = addFocus(input.optHoldMoveSens);
+
+		linkHorizontal(keyBindings, controllerBindings);
+		linkHorizontal(controlSens, holdMoveSens);
+		linkVertical(firstNonNull(keyBindings, controllerBindings), firstNonNull(controlSens, holdMoveSens));
+		linkVertical(controllerBindings, holdMoveSens);
+
+		contentExitNode = firstNonNull(holdMoveSens, firstNonNull(controlSens, firstNonNull(controllerBindings, keyBindings)));
+	}
+
+	private void buildDataNavigation() {
+		KeyboardNode news = addFocus(data.chkNews);
+		KeyboardNode updates = addFocus(data.chkUpdates);
+		KeyboardNode betas = addFocus(data.chkBetas);
+		KeyboardNode wifi = addFocus(data.chkWifi);
+
+		linkHorizontal(news, updates);
+		linkVertical(news, firstNonNull(betas, wifi));
+		linkVertical(updates, firstNonNull(betas, wifi));
+		linkVertical(betas, wifi);
+
+		contentExitNode = firstNonNull(wifi, firstNonNull(betas, firstNonNull(updates, news)));
+	}
+
+	private void buildAudioNavigation() {
+		KeyboardNode music = addFocus(audio.optMusic);
+		KeyboardNode sfx = addFocus(audio.optSFX);
+		KeyboardNode musicMute = addFocus(audio.chkMusicMute);
+		KeyboardNode sfxMute = addFocus(audio.chkMuteSFX);
+		KeyboardNode ignoreSilent = addFocus(audio.chkIgnoreSilent);
+		KeyboardNode musicBG = addFocus(audio.chkMusicBG);
+		KeyboardNode bottom = firstNonNull(ignoreSilent, musicBG);
+
+		linkHorizontal(music, sfx);
+		linkHorizontal(musicMute, sfxMute);
+
+		linkVertical(music, musicMute);
+		linkVertical(sfx, sfxMute);
+		linkVertical(musicMute, bottom);
+		linkVertical(sfxMute, bottom);
+
+		contentExitNode = firstNonNull(bottom, firstNonNull(sfxMute, firstNonNull(musicMute, firstNonNull(sfx, music))));
+	}
+
+	private void buildLanguageNavigation() {
+		KeyboardNode lastLanguage = null;
+		if (langs.lanBtns != null) {
+			for (RedButton btn : langs.lanBtns) {
+				KeyboardNode node = addFocus(btn);
+				if (node != null) lastLanguage = node;
+			}
+		}
+		KeyboardNode credits = addFocus(langs.btnCredits);
+		contentExitNode = firstNonNull(credits, lastLanguage);
+		// Language buttons are a real grid. The navigator's spatial fallback is best here,
+		// because rows may have different lengths depending on translation count and layout width.
+	}
+
+	private void buildSettingsTabNavigation() {
+		KeyboardNode previous = null;
+		KeyboardNode selectedTab = null;
+
+		for (Tab tab : tabs) {
+			KeyboardNode node = addFocus(tab);
+			if (previous != null && node != null) {
+				linkHorizontal(previous, node);
+			}
+			if (tab == selected) {
+				selectedTab = node;
+			}
+			if (node != null) {
+				previous = node;
+			}
+		}
+
+		if (contentExitNode != null && selectedTab != null) {
+			linkVertical(contentExitNode, selectedTab);
+		}
+	}
+
+	private KeyboardNode addFocus(Component component) {
+		if (component != null && component.visible && component.active) {
+			return keyboardNavigator.add(component);
+		}
+		return null;
+	}
+
+	private KeyboardNode firstNonNull(KeyboardNode first, KeyboardNode second) {
+		return first != null ? first : second;
+	}
+
+	private void linkHorizontal(KeyboardNode left, KeyboardNode right) {
+		if (left != null && right != null) {
+			left.right(right);
+		}
+	}
+
+	private void linkVertical(KeyboardNode upper, KeyboardNode lower) {
+		if (upper != null && lower != null) {
+			upper.down(lower);
+		}
+	}
+
+	private void selectRelativeTab(int direction) {
+		int currentIndex;
+		if (tabs.size() == 5 && last_index >= 3) {
+			currentIndex = last_index - 1;
+		} else {
+			currentIndex = last_index;
+		}
+
+		int nextIndex = currentIndex + direction;
+		if (nextIndex < 0 || nextIndex >= tabs.size()) {
+			return;
+		}
+
+		select(nextIndex);
+		rebuildKeyboardNavigator();
 	}
 
 	@Override
 	public void hide() {
+		if (keyboardNavListener != null) {
+			KeyEvent.removeKeyListener(keyboardNavListener);
+			keyboardNavListener = null;
+		}
+
 		super.hide();
 		//resets generators because there's no need to retain chars for languages not selected
 		ShatteredPixelDungeon.seamlessResetScene(new Game.SceneChangeCallback() {

@@ -34,22 +34,29 @@ import com.shatteredpixel.shatteredpixeldungeon.ui.Icons;
 import com.shatteredpixel.shatteredpixeldungeon.ui.TitleBackground;
 import com.shatteredpixel.shatteredpixeldungeon.ui.RedButton;
 import com.shatteredpixel.shatteredpixeldungeon.ui.RenderedTextBlock;
+import com.shatteredpixel.shatteredpixeldungeon.ui.SpatialKeyboardNavigator;
 import com.shatteredpixel.shatteredpixeldungeon.ui.StyledButton;
 import com.shatteredpixel.shatteredpixeldungeon.ui.Window;
 import com.shatteredpixel.shatteredpixeldungeon.windows.IconTitle;
 import com.shatteredpixel.shatteredpixeldungeon.windows.WndTitledMessage;
+import com.watabou.input.KeyEvent;
 import com.watabou.noosa.BitmapText;
 import com.watabou.noosa.Camera;
 import com.watabou.noosa.Game;
 import com.watabou.noosa.NinePatch;
 import com.watabou.noosa.ui.Component;
 import com.watabou.utils.RectF;
+import com.watabou.utils.Signal;
 
 import java.util.ArrayList;
 
 public class NewsScene extends PixelScene {
 
 	boolean displayingNoArticles = false;
+
+	private SpatialKeyboardNavigator keyboardNavigator;
+	private Signal.Listener<KeyEvent> keyboardNavListener;
+	private ArrayList<StyledButton> keyboardButtons;
 
 	private static final int BTN_HEIGHT = 22;
 	private static final int BTN_WIDTH = 100;
@@ -66,6 +73,8 @@ public class NewsScene extends PixelScene {
 
 		TitleBackground BG = new TitleBackground(w, h);
 		add(BG);
+
+		keyboardButtons = new ArrayList<>();
 
 		w -= insets.left + insets.right;
 		h -= insets.top + insets.bottom;
@@ -131,6 +140,7 @@ public class NewsScene extends PixelScene {
 				}
 				align(b);
 				add(b);
+				keyboardButtons.add(b);
 				if (!PixelScene.landscape()) {
 					top += BTN_HEIGHT;
 				} else {
@@ -156,7 +166,40 @@ public class NewsScene extends PixelScene {
 		btnSite.textColor(Window.TITLE_COLOR);
 		btnSite.setRect(left, top, fullWidth, BTN_HEIGHT);
 		add(btnSite);
+		keyboardButtons.add(btnSite);
 
+		registerKeyboardNavigation();
+
+	}
+
+	private void registerKeyboardNavigation() {
+		keyboardNavigator = new SpatialKeyboardNavigator();
+		for (StyledButton button : keyboardButtons) {
+			keyboardNavigator.add(button);
+		}
+		keyboardNavigator.setOnEscape(new Runnable() {
+			@Override
+			public void run() {
+				ShatteredPixelDungeon.switchNoFade(TitleScene.class);
+			}
+		});
+		keyboardNavigator.updateFocus();
+		keyboardNavListener = new Signal.Listener<KeyEvent>() {
+			@Override
+			public boolean onSignal(KeyEvent event) {
+				return keyboardNavigator.handleKey(event);
+			}
+		};
+		KeyEvent.addKeyListener(keyboardNavListener);
+	}
+
+	@Override
+	public void destroy() {
+		super.destroy();
+		if (keyboardNavListener != null) {
+			KeyEvent.removeKeyListener(keyboardNavListener);
+			keyboardNavListener = null;
+		}
 	}
 
 	@Override
@@ -182,13 +225,13 @@ public class NewsScene extends PixelScene {
 		protected void createChildren() {
 			bg = Chrome.get(Chrome.Type.GREY_BUTTON_TR);
 			add(bg);
-			
+
 			String message = "";
 
 			if (Messages.lang() != Languages.ENGLISH){
 				message += Messages.get(this, "english_warn");
 			}
-			
+
 			if (!News.articlesAvailable()){
 				if (SPDSettings.news()) {
 					if (SPDSettings.WiFi() && !Game.platform.connectedToUnmeteredNetwork()) {
@@ -224,7 +267,7 @@ public class NewsScene extends PixelScene {
 			}
 
 			if (message.startsWith("\n\n")) message = message.replaceFirst("\n\n", "");
-			
+
 			text = PixelScene.renderTextBlock(message, 6);
 			text.hardlight(CharSprite.WARNING);
 			add(text);

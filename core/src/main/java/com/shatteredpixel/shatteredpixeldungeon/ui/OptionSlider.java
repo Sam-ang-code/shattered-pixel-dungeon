@@ -31,7 +31,7 @@ import com.watabou.noosa.ui.Component;
 import com.watabou.utils.GameMath;
 import com.watabou.utils.PointF;
 
-public abstract class OptionSlider extends Component {
+public abstract class OptionSlider extends Component implements KeyboardFocusable {
 
 	private PointerArea pointerArea;
 
@@ -50,12 +50,13 @@ public abstract class OptionSlider extends Component {
 	private ColorBlock[] sliderTicks;
 	private float tickDist;
 
+	private boolean keyboardFocused = false;
 
-	public OptionSlider(String title, String minTxt, String maxTxt, int minVal, int maxVal){
+	public OptionSlider(String title, String minTxt, String maxTxt, int minVal, int maxVal) {
 		super();
 
 		//shouldn't function if this happens.
-		if (minVal > maxVal){
+		if (minVal > maxVal) {
 			minVal = maxVal;
 			active = false;
 		}
@@ -68,7 +69,7 @@ public abstract class OptionSlider extends Component {
 		this.maxVal = maxVal;
 
 		sliderTicks = new ColorBlock[(maxVal - minVal) + 1];
-		for (int i = 0; i < sliderTicks.length; i++){
+		for (int i = 0; i < sliderTicks.length; i++) {
 			add(sliderTicks[i] = new ColorBlock(1, 9, 0xFF222222));
 		}
 		add(sliderNode);
@@ -76,30 +77,31 @@ public abstract class OptionSlider extends Component {
 
 	protected abstract void onChange();
 
-	public int getSelectedValue(){
+	public int getSelectedValue() {
 		return selectedVal;
 	}
 
 	public void setSelectedValue(int val) {
-		this.selectedVal = val;
-		sliderNode.x = (int)(x + tickDist*(selectedVal-minVal)) + 0.5f;
-		sliderNode.y = sliderBG.y-4;
+		this.selectedVal = Math.max(minVal, Math.min(maxVal, val));
+		if (sliderBG == null || sliderNode == null || tickDist == 0) return;
+		sliderNode.x = (int) (x + tickDist * (selectedVal - minVal)) + 0.5f;
+		sliderNode.y = sliderBG.y - 4;
 		PixelScene.align(sliderNode);
 	}
 
-	public void enable( boolean value ) {
+	public void enable(boolean value) {
 		active = value;
-		title.alpha( value ? 1.0f : 0.3f );
-		minTxt.alpha( value ? 1.0f : 0.3f );
-		maxTxt.alpha( value ? 1.0f : 0.3f );
-		sliderNode.alpha( value ? 1.0f : 0.3f );
+		title.alpha(value ? 1.0f : 0.3f);
+		minTxt.alpha(value ? 1.0f : 0.3f);
+		maxTxt.alpha(value ? 1.0f : 0.3f);
+		sliderNode.alpha(value ? 1.0f : 0.3f);
 	}
 
 	@Override
 	protected void createChildren() {
 		super.createChildren();
 
-		add( BG = Chrome.get(Chrome.Type.RED_BUTTON));
+		add(BG = Chrome.get(Chrome.Type.RED_BUTTON));
 		BG.alpha(0.5f);
 
 		add(title = PixelScene.renderTextBlock(9));
@@ -110,38 +112,38 @@ public abstract class OptionSlider extends Component {
 		sliderNode = Chrome.get(Chrome.Type.RED_BUTTON);
 		sliderNode.size(4, 7);
 
-		pointerArea = new PointerArea(0, 0, 0, 0){
+		pointerArea = new PointerArea(0, 0, 0, 0) {
 			boolean pressed = false;
 
 			@Override
-			protected void onPointerDown( PointerEvent event ) {
+			protected void onPointerDown(PointerEvent event) {
 				pressed = true;
 				PointF p = camera().screenToCamera((int) event.current.x, (int) event.current.y);
-				sliderNode.x = GameMath.gate(sliderBG.x-2, p.x - sliderNode.width()/2, sliderBG.x+sliderBG.width()-2);
+				sliderNode.x = GameMath.gate(sliderBG.x - 2, p.x - sliderNode.width() / 2, sliderBG.x + sliderBG.width() - 2);
 				sliderNode.brightness(1.5f);
 			}
 
 			@Override
-			protected void onPointerUp( PointerEvent event ) {
+			protected void onPointerUp(PointerEvent event) {
 				if (pressed) {
 					PointF p = camera().screenToCamera((int) event.current.x, (int) event.current.y);
-					sliderNode.x = GameMath.gate(sliderBG.x - 2, p.x - sliderNode.width()/2, sliderBG.x + sliderBG.width() - 2);
-					sliderNode.resetColor();
-					
+					sliderNode.x = GameMath.gate(sliderBG.x - 2, p.x - sliderNode.width() / 2, sliderBG.x + sliderBG.width() - 2);
+					if (keyboardFocused) sliderNode.brightness(1.5f);
+					else sliderNode.resetColor();
+
 					//sets the selected value
 					selectedVal = minVal + Math.round((sliderNode.x - x) / tickDist);
-					sliderNode.x = x + tickDist * (selectedVal - minVal) + 0.5f;
-					PixelScene.align(sliderNode);
+					setSelectedValue(selectedVal);
 					onChange();
 					pressed = false;
 				}
 			}
 
 			@Override
-			protected void onDrag( PointerEvent event ) {
+			protected void onDrag(PointerEvent event) {
 				if (pressed) {
 					PointF p = camera().screenToCamera((int) event.current.x, (int) event.current.y);
-					sliderNode.x = GameMath.gate(sliderBG.x - 2, p.x - sliderNode.width()/2, sliderBG.x + sliderBG.width() - 2);
+					sliderNode.x = GameMath.gate(sliderBG.x - 2, p.x - sliderNode.width() / 2, sliderBG.x + sliderBG.width() - 2);
 				}
 			}
 		};
@@ -152,7 +154,7 @@ public abstract class OptionSlider extends Component {
 	@Override
 	protected void layout() {
 
-		if (title.width() > 0.6f*width){
+		if (title.width() > 0.6f * width) {
 			String titleText = title.text;
 			remove(title);
 			title = PixelScene.renderTextBlock(6);
@@ -161,31 +163,31 @@ public abstract class OptionSlider extends Component {
 		}
 
 		title.setPos(
-				x + (width-title.width())/2,
-				y+2
+				x + (width - title.width()) / 2,
+				y + 2
 		);
 		PixelScene.align(title);
 		sliderBG.y = y + height() - 7;
-		sliderBG.x = x+2;
-		sliderBG.size(width-5, 1);
-		tickDist = sliderBG.width()/(maxVal - minVal);
-		for (int i = 0; i < sliderTicks.length; i++){
-			sliderTicks[i].y = sliderBG.y-4;
-			sliderTicks[i].x = x + 2 + (tickDist*i);
+		sliderBG.x = x + 2;
+		sliderBG.size(width - 5, 1);
+		tickDist = sliderBG.width() / (maxVal - minVal);
+		for (int i = 0; i < sliderTicks.length; i++) {
+			sliderTicks[i].y = sliderBG.y - 4;
+			sliderTicks[i].x = x + 2 + (tickDist * i);
 			PixelScene.align(sliderTicks[i]);
 		}
 
 		minTxt.setPos(
-				x+1,
-				sliderBG.y-5-minTxt.height()
+				x + 1,
+				sliderBG.y - 5 - minTxt.height()
 		);
 		maxTxt.setPos(
-				x+width()-maxTxt.width()-1,
-				sliderBG.y-5-minTxt.height()
+				x + width() - maxTxt.width() - 1,
+				sliderBG.y - 5 - minTxt.height()
 		);
 
-		sliderNode.x = x + tickDist*(selectedVal-minVal) + 0.5f;
-		sliderNode.y = sliderBG.y-3;
+		sliderNode.x = x + tickDist * (selectedVal - minVal) + 0.5f;
+		sliderNode.y = sliderBG.y - 3;
 		PixelScene.align(sliderNode);
 
 		pointerArea.x = x;
@@ -197,5 +199,69 @@ public abstract class OptionSlider extends Component {
 		BG.x = x;
 		BG.y = y;
 
+		applyKeyboardFocusVisual();
+	}
+
+	public void keyboardLeft() {
+		int before = getSelectedValue();
+		setSelectedValue(before - 1);
+		if (getSelectedValue() != before) {
+			onChange();
+		}
+	}
+
+	public void keyboardRight() {
+		int before = getSelectedValue();
+		setSelectedValue(before + 1);
+		if (getSelectedValue() != before) {
+			onChange();
+		}
+	}
+
+	public void keyboardClick() {
+		keyboardRight();
+	}
+
+	public void setKeyboardFocused(boolean focused) {
+		keyboardFocused = focused;
+		applyKeyboardFocusVisual();
+	}
+
+	private void applyKeyboardFocusVisual() {
+		if (BG != null) {
+			BG.alpha(keyboardFocused ? 0.85f : 0.5f);
+			if (keyboardFocused) BG.brightness(1.15f);
+			else BG.resetColor();
+		}
+		if (sliderNode != null) {
+			if (keyboardFocused) sliderNode.brightness(1.5f);
+			else sliderNode.resetColor();
+		}
+		if (title != null) {
+			title.hardlight(keyboardFocused ? Window.TITLE_COLOR : Window.WHITE);
+			title.alpha(keyboardFocused ? 1.0f : 0.9f);
+		}
+		if (minTxt != null) minTxt.alpha(keyboardFocused ? 1.0f : 0.9f);
+		if (maxTxt != null) maxTxt.alpha(keyboardFocused ? 1.0f : 0.9f);
+	}
+
+	@Override
+	public void onKeyboardFocus(boolean focused) {
+		setKeyboardFocused(focused);
+	}
+
+	@Override
+	public void onKeyboardActivate() {
+		keyboardClick();
+	}
+
+	@Override
+	public boolean onKeyboardLeft() {
+		return false;
+	}
+
+	@Override
+	public boolean onKeyboardRight() {
+		return false;
 	}
 }

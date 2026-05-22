@@ -21,6 +21,7 @@
 
 package com.shatteredpixel.shatteredpixeldungeon.ui;
 
+import com.badlogic.gdx.Input;
 import com.shatteredpixel.shatteredpixeldungeon.scenes.PixelScene;
 import com.shatteredpixel.shatteredpixeldungeon.sprites.ItemSprite;
 import com.watabou.noosa.ColorBlock;
@@ -34,6 +35,9 @@ public class ScrollingGridPane extends ScrollPane {
 
 	private ArrayList<Component> items = new ArrayList<>();
 	private ArrayList<ColorBlock> separators = new ArrayList<>();
+	private ArrayList<GridItem> keyboardItems = new ArrayList<>();
+
+	private int focusedIndex = -1;
 
 	private static final int ITEM_SIZE	= 17;
 	private static final int MIN_GROUP_SIZE = 3*(ITEM_SIZE+1);
@@ -54,6 +58,12 @@ public class ScrollingGridPane extends ScrollPane {
 	public void addItem( ScrollingGridPane.GridItem item ){
 		content.add(item);
 		items.add(item);
+		keyboardItems.add(item);
+
+		if (focusedIndex == -1) {
+			focusedIndex = 0;
+			updateKeyboardFocus();
+		}
 	}
 
 	public void addHeader( String text ){
@@ -71,6 +81,175 @@ public class ScrollingGridPane extends ScrollPane {
 		content.clear();
 		items.clear();
 		separators.clear();
+		keyboardItems.clear();
+		focusedIndex = -1;
+	}
+
+	public boolean handleKeyboard(int keyCode) {
+		if (keyboardItems.isEmpty()) {
+			return false;
+		}
+
+		if (focusedIndex < 0 || focusedIndex >= keyboardItems.size()) {
+			focusedIndex = 0;
+			updateKeyboardFocus();
+			scrollFocusedIntoView();
+		}
+
+		switch (keyCode) {
+			case Input.Keys.LEFT:
+				moveSpatial(-1, 0);
+				return true;
+
+			case Input.Keys.RIGHT:
+				moveSpatial(1, 0);
+				return true;
+
+			case Input.Keys.UP:
+				moveSpatial(0, -1);
+				return true;
+
+			case Input.Keys.DOWN:
+				moveSpatial(0, 1);
+				return true;
+
+			case Input.Keys.TAB:
+				moveLinear(1);
+				return true;
+
+			case Input.Keys.ENTER:
+			case Input.Keys.SPACE:
+				activateFocusedItem();
+				return true;
+
+			case Input.Keys.HOME:
+				focusedIndex = 0;
+				updateKeyboardFocus();
+				scrollFocusedIntoView();
+				return true;
+
+			case Input.Keys.END:
+				focusedIndex = keyboardItems.size() - 1;
+				updateKeyboardFocus();
+				scrollFocusedIntoView();
+				return true;
+		}
+
+		return false;
+	}
+
+	private void moveLinear(int direction) {
+		if (keyboardItems.isEmpty()) {
+			return;
+		}
+
+		focusedIndex += direction;
+
+		if (focusedIndex < 0) {
+			focusedIndex = keyboardItems.size() - 1;
+		} else if (focusedIndex >= keyboardItems.size()) {
+			focusedIndex = 0;
+		}
+
+		updateKeyboardFocus();
+		scrollFocusedIntoView();
+	}
+
+	private void moveSpatial(int dx, int dy) {
+		if (keyboardItems.isEmpty()) {
+			return;
+		}
+
+		GridItem current = keyboardItems.get(focusedIndex);
+
+		float cx = centerX(current);
+		float cy = centerY(current);
+
+		int bestIndex = -1;
+		float bestScore = Float.MAX_VALUE;
+
+		for (int i = 0; i < keyboardItems.size(); i++) {
+			if (i == focusedIndex) {
+				continue;
+			}
+
+			GridItem candidate = keyboardItems.get(i);
+
+			float tx = centerX(candidate);
+			float ty = centerY(candidate);
+
+			float diffX = tx - cx;
+			float diffY = ty - cy;
+
+			if (dx > 0 && diffX <= 0) continue;
+			if (dx < 0 && diffX >= 0) continue;
+			if (dy > 0 && diffY <= 0) continue;
+			if (dy < 0 && diffY >= 0) continue;
+
+			float primary = dx != 0 ? Math.abs(diffX) : Math.abs(diffY);
+			float secondary = dx != 0 ? Math.abs(diffY) : Math.abs(diffX);
+
+			// Industrial-style directional scoring:
+			// 1. Strongly prefer the requested direction.
+			// 2. Prefer items on the same row/column.
+			// 3. Then choose the nearest candidate.
+			float score = primary * 1000f + secondary * 10f;
+
+			if (score < bestScore) {
+				bestScore = score;
+				bestIndex = i;
+			}
+		}
+
+		// Boundary rule: stop at the edge instead of jumping unpredictably.
+		if (bestIndex != -1) {
+			focusedIndex = bestIndex;
+			updateKeyboardFocus();
+			scrollFocusedIntoView();
+		}
+	}
+
+	private void updateKeyboardFocus() {
+		for (int i = 0; i < keyboardItems.size(); i++) {
+			keyboardItems.get(i).setKeyboardFocused(i == focusedIndex);
+		}
+	}
+
+	private void activateFocusedItem() {
+		if (focusedIndex < 0 || focusedIndex >= keyboardItems.size()) {
+			return;
+		}
+
+		GridItem focused = keyboardItems.get(focusedIndex);
+		focused.keyboardClick();
+	}
+
+	private void scrollFocusedIntoView() {
+		if (focusedIndex < 0 || focusedIndex >= keyboardItems.size()) {
+			return;
+		}
+
+		GridItem focused = keyboardItems.get(focusedIndex);
+
+		float focusTop = focused.top();
+		float focusBottom = focused.bottom();
+
+		float viewTop = content.camera.scroll.y;
+		float viewBottom = viewTop + height();
+
+		if (focusTop < viewTop) {
+			scrollTo(0, Math.max(0, focusTop - 2));
+		} else if (focusBottom > viewBottom) {
+			scrollTo(0, Math.max(0, focusBottom - height() + 2));
+		}
+	}
+
+	private float centerX(Component component) {
+		return component.left() + component.width() / 2f;
+	}
+
+	private float centerY(Component component) {
+		return component.top() + component.height() / 2f;
 	}
 
 	@Override
@@ -81,20 +260,15 @@ public class ScrollingGridPane extends ScrollPane {
 
 		int sepsUsed = 0;
 
-		//these variables help control logic for laying out multiple grid groups on one line
-		boolean freshRow = true; //whether the previous group is still on its first row
-		boolean lastWasSmallheader = false; //whether the last UI element was a header on its own
-		float widthThisGroup = 0; //how wide the current group is (we use a min of 3 items)
+		boolean freshRow = true;
+		boolean lastWasSmallheader = false;
+		float widthThisGroup = 0;
 
 		for (int i = 0; i < items.size(); i++){
 			Component item = items.get(i);
 			if (item instanceof GridHeader){
-				//we can sometimes get two smaller headers next to each other if a group has no items in it
-				//so we need to treat it as if there were grid items for proper layout
 				if (left > 0 || lastWasSmallheader){
 
-					//this bit of logic exists so that multiple headers can be on one row
-					// if all of their groups have a small number of items, with a min space for 3
 					float spacing = Math.max(0, MIN_GROUP_SIZE - widthThisGroup);
 					float spaceLeft = width() - (left + spacing);
 					int spaceReq = 0;
@@ -163,6 +337,8 @@ public class ScrollingGridPane extends ScrollPane {
 
 		content.setSize(width, top);
 		super.layout();
+
+		updateKeyboardFocus();
 	}
 
 	public static class GridItem extends Component {
@@ -172,6 +348,8 @@ public class ScrollingGridPane extends ScrollPane {
 		protected Visual secondIcon;
 
 		protected ColorBlock bg;
+
+		private boolean keyboardFocused = false;
 
 		public GridItem( Image icon ) {
 			super();
@@ -193,6 +371,28 @@ public class ScrollingGridPane extends ScrollPane {
 
 		public void hardLightBG( float r, float g, float b ){
 			bg.hardlight(r, g, b);
+		}
+
+		public void setKeyboardFocused(boolean focused) {
+			keyboardFocused = focused;
+
+			if (focused) {
+				bg.hardlight(Window.TITLE_COLOR);
+				icon.brightness(1.25f);
+				if (secondIcon != null) secondIcon.brightness(1.25f);
+			} else {
+				bg.resetColor();
+				icon.resetColor();
+				if (secondIcon != null) secondIcon.resetColor();
+			}
+		}
+
+		public boolean isKeyboardFocused() {
+			return keyboardFocused;
+		}
+
+		public void keyboardClick() {
+			onClick(x + width() / 2f, y + height() / 2f);
 		}
 
 		public boolean onClick( float x, float y ){
