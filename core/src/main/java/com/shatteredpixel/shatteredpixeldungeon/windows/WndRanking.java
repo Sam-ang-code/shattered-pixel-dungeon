@@ -25,6 +25,7 @@ import com.badlogic.gdx.Input;
 import com.shatteredpixel.shatteredpixeldungeon.Assets;
 import com.shatteredpixel.shatteredpixeldungeon.Badges;
 import com.shatteredpixel.shatteredpixeldungeon.Challenges;
+import com.shatteredpixel.shatteredpixeldungeon.DamageStatistics;
 import com.shatteredpixel.shatteredpixeldungeon.Dungeon;
 import com.shatteredpixel.shatteredpixeldungeon.QuickSlot;
 import com.shatteredpixel.shatteredpixeldungeon.Rankings;
@@ -227,7 +228,7 @@ public class WndRanking extends WndTabbed {
 
 	private class StatsTab extends Group {
 
-		private int GAP	= 4;
+		private int GAP	= 3;
 
 		public StatsTab() {
 			super();
@@ -325,7 +326,12 @@ public class WndRanking extends WndTabbed {
 
 				pos += GAP;
 
-				pos = statSlot(this, Messages.get(this, "enemies"), num.format(Statistics.enemiesSlain), pos);
+				pos = statSlot(this, Messages.get(this, "damage_dealt"), num.format(DamageStatistics.heroDamageDealt), pos);
+				pos = statSlot(this, Messages.get(this, "damage_taken"), num.format(DamageStatistics.heroDamageTaken), pos);
+				pos = statSlot(this, Messages.get(this, "enemies_defeated"), num.format(DamageStatistics.enemiesDefeated), pos);
+				pos = statSlot(this, Messages.get(this, "attacks_made"), num.format(DamageStatistics.heroAttacksMade), pos);
+				pos += GAP;
+
 				pos = statSlot(this, Messages.get(this, "gold"), num.format(Statistics.goldCollected), pos);
 				pos = statSlot(this, Messages.get(this, "food"), num.format(Statistics.foodEaten), pos);
 				pos = statSlot(this, Messages.get(this, "alchemy"), num.format(Statistics.itemsCrafted), pos);
