@@ -24,6 +24,7 @@ package com.shatteredpixel.shatteredpixeldungeon.actors.mobs;
 import com.shatteredpixel.shatteredpixeldungeon.Assets;
 import com.shatteredpixel.shatteredpixeldungeon.Badges;
 import com.shatteredpixel.shatteredpixeldungeon.Challenges;
+import com.shatteredpixel.shatteredpixeldungeon.DamageStatistics;
 import com.shatteredpixel.shatteredpixeldungeon.Dungeon;
 import com.shatteredpixel.shatteredpixeldungeon.Statistics;
 import com.shatteredpixel.shatteredpixeldungeon.actors.Actor;
@@ -843,6 +844,7 @@ public abstract class Mob extends Char {
 			
 			if (alignment == Alignment.ENEMY) {
 				Statistics.enemiesSlain++;
+				DamageStatistics.recordEnemyDefeated();
 				Badges.validateMonstersSlain();
 				Statistics.qualifiedForNoKilling = false;
 				Bestiary.setSeen(getClass());

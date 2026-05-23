@@ -23,6 +23,7 @@ package com.shatteredpixel.shatteredpixeldungeon.actors;
 
 import com.shatteredpixel.shatteredpixeldungeon.Assets;
 import com.shatteredpixel.shatteredpixeldungeon.Badges;
+import com.shatteredpixel.shatteredpixeldungeon.DamageStatistics;
 import com.shatteredpixel.shatteredpixeldungeon.Dungeon;
 import com.shatteredpixel.shatteredpixeldungeon.actors.blobs.Electricity;
 import com.shatteredpixel.shatteredpixeldungeon.actors.blobs.StormCloud;
@@ -368,6 +369,10 @@ public abstract class Char extends Actor {
 	public boolean attack( Char enemy, float dmgMulti, float dmgBonus, float accMulti ) {
 
 		if (enemy == null) return false;
+
+		if (this == Dungeon.hero) {
+			DamageStatistics.recordHeroAttack();
+		}
 		
 		boolean visibleFight = Dungeon.level.heroFOV[pos] || Dungeon.level.heroFOV[enemy.pos];
 
@@ -945,6 +950,7 @@ public abstract class Char extends Actor {
 			shield.activate();
 		}
 
+		int preDamageStatHP = HP + shielding();
 		int shielded = dmg;
 		dmg = ShieldBuff.processDamage(this, dmg, src);
 		shielded -= dmg;
@@ -978,6 +984,8 @@ public abstract class Char extends Actor {
 				((Char) src).buff(Kinetic.KineticTracker.class).detach();
 			}
 		}
+
+		DamageStatistics.recordDamageDealt(this, src, preDamageStatHP - (Math.max(HP, 0) + shielding()));
 		
 		if (sprite != null) {
 			//defaults to normal damage icon if no other ones apply
